@@ -14,6 +14,9 @@ local VERSION = "6.0.0"
 -- Reemplaza este link con tu link RAW de GitHub (donde esté tu versión escrita)
 local GITHUB_RAW = "https://raw.githubusercontent.com/Sam123mir/BloxyHub/refs/heads/main/version.txt"
 
+print("[BLOXY HUB] Iniciando carga de Blox Fruits Panel...")
+print("[BLOXY HUB] Servicios cargados. Seteando variables locales...")
+
 if getgenv().BloxyHub.Active then
     warn("[BLOXY HUB] Ya hay una instancia activa. Cerrando instancia anterior...")
     if getgenv().BloxyHub.Shutdown then
@@ -321,19 +324,7 @@ game:GetService("LogService").MessageOut:Connect(function(msg, messageType)
     end
 end)
 
-function Session:Update()
-    local elapsed = os.time() - self.StartTime
-    local hours = math.floor(elapsed / 3600)
-    local mins = math.floor((elapsed % 3600) / 60)
-    local secs = elapsed % 60
-    
-    self.Uptime = string.format("%02d:%02d:%02d", hours, mins, secs)
-    self.LevelsGained = LocalPlayer.Data.Level.Value - self.StartLevel
-    self.BeliEarned = LocalPlayer.Data.Beli.Value - self.StartBeli
-    self.FragmentsEarned = LocalPlayer.Data.Fragments.Value - self.StartFragments
-    self.Ping = math.floor(Services.Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
-    self.FPS = math.floor(Services.Stats.FrameRateManager.RenderAverage:GetValue())
-end
+-- Redundancia eliminada
 
 -- ═══════════════════════════════════════════════════════════════
 -- MÓDULO: UTILIDADES Y HELPERS
@@ -886,8 +877,11 @@ else
     return
 end
 
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+local SaveManager, InterfaceManager
+pcall(function()
+    SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+    InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+end)
 
 local Window = Fluent:CreateWindow({
     Title = "Blox Fruits Panel 🏴‍☠️ | Bloxy Hub Titanium",
