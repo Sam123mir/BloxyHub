@@ -1,215 +1,176 @@
 --[[
-    BLOXY HUB ULTIMATE - VERSIÓN 4.0 (SAMMIR EDITION)
-    El Script más potente y estable del mercado.
-    Novedades: Ultra Fast Attack, Auto Stats, Server Hop, Anti-Cheat Pro.
-    Idioma: Español (100%)
+    BLOXY HUB ELITE - VERSIÓN 5.0 (FINAL)
+    Sammir Edition | 100% Optimizado | Zero-Lag
+    Funciones: Auto Mastery, CPU Mode, Selective Stats, Admin Detector.
 --]]
 
 getgenv().SecureMode = true
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- // VENTANA PRINCIPAL
-local Window = Rayfield:CreateWindow({
-    Name = "Bloxy Hub 🏆 | ULTIMATE V4",
-    LoadingTitle = "Cargando Sammir Edition...",
-    LoadingSubtitle = "Protección Anti-Cheat Nv. 5 Activa",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "BloxyHub_V4",
-        FileName = "Config"
-    }
-})
-
--- // CONFIGURACIÓN GLOBAL
-local Config = {
-    AutoLvl = false,
-    FastAttack = false,
-    AutoPVP = false,
-    Aimbot = false,
-    ServerHop = false,
-    AutoStats = false,
-    StatsTarget = "Melee", -- Melee, Defense, Sword, Blox Fruit
-    AutoSea = false,
-    VueloInf = false,
-    VelVuelo = 150,
-    RadioFarm = 65,
-    AttackSpeed = 0.05 -- Ultra Rápido
+-- // ESTADÍSTICAS DE SESIÓN
+local Session = {
+    StartTime = os.time(),
+    LevelsGained = 0,
+    BeliEarned = 0,
+    StartLvl = game:GetService("Players").LocalPlayer.Data.Level.Value
 }
 
--- // SERVICIOS & REFERENCIAS
+-- // CONFIGURACIÓN ELITE
+local Config = {
+    AutoLvl = false,
+    AutoMastery = false,
+    MasteryWeapon = "Melee", -- Melee, Sword, Fruit, Gun
+    SelectiveStats = {
+        Melee = false,
+        Defense = false,
+        Sword = false,
+        Gun = false,
+        BloxFruit = false
+    },
+    CPUMode = false,
+    WhiteScreen = false,
+    AdminDetector = false,
+    AttackSpeed = 0.05,
+    FastAttack = true,
+    KillAura = false,
+    AutoPVP = false
+}
+
+-- // SERVICIOS
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
-local RunService = game:GetService("RunService")
 local LP = Players.LocalPlayer
 
--- // PESTAÑAS (CATEGORÍAS PRO)
+-- // VENTANA PRINCIPAL (ESTILO GLASSMORPHISM)
+local Window = Rayfield:CreateWindow({
+    Name = "Bloxy Hub ELITE 🏅 | v5.0",
+    LoadingTitle = "Iniciando Edición de Élite...",
+    LoadingSubtitle = "Protegiendo las cuentas de nuestros usuarios.",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "BloxyHub_V5",
+        FileName = "Elite_Config"
+    },
+    ImageId = 4483362458 -- Placeholder Logo (Actualizable por Sammir)
+})
+
+-- // PESTAÑAS (CATEGORÍAS ELITE)
 local Tabs = {
-    Principal = Window:CreateTab("General", 4483362458),
-    Farming = Window:CreateTab("Auto-Lvl", 4483362458),
-    PVP = Window:CreateTab("Auto-PVP", 4483362458),
-    Stats = Window:CreateTab("Stats & Razas", 4483362458),
-    Frutas = Window:CreateTab("Frutas", 4483362458),
-    Utilidad = Window:CreateTab("Utilidades", 4483362458)
+    Inicio = Window:CreateTab("Dashboard", 4483362458),
+    Farming = Window:CreateTab("Farming & Maestría", 4483362458),
+    Combate = Window:CreateTab("Combate / PVP", 4483362458),
+    Stats = Window:CreateTab("Estadísticas", 4483362458),
+    Seguridad = Window:CreateTab("Seguridad & Ops", 4483362458)
 }
 
--- // GUI NOTIFICACIÓN DE INICIO
-Rayfield:Notify({
-    Title = "Sammir Edition V4 Cargada",
-    Content = "Usa 'RightControl' para ocultar. ¡A disfrutar!",
-    Duration = 5
+-- // PESTAÑA INICIO (DASHBOARD)
+Tabs.Inicio:CreateSection("Resumen de Sesión")
+local StatsLabel = Tabs.Inicio:CreateParagraph({
+    Title = "Estadísticas en Tiempo Real",
+    Content = "Cargando datos..."
 })
 
--- // PESTAÑA PRINCIPAL
-Tabs.Principal:CreateSection("Información del Usuario")
-Tabs.Principal:CreateParagraph({Title = LP.Name, Content = "Beli: " .. LP.Data.Beli.Value .. "\nFragmentos: " .. LP.Data.Fragments.Value})
-
--- // PESTAÑA FARMING (AUTO LVL)
-Tabs.Farming:CreateSection("Leveling Inteligente")
-Tabs.Farming:CreateToggle({
-    Name = "INICIAR AUTO LVL (Misiones)",
-    CurrentValue = false,
-    Flag = "F_Lvl",
-    Callback = function(v) Config.AutoLvl = v end
-})
-
-Tabs.Farming:CreateToggle({
-    Name = "Ultra Fast Attack (No CD)",
-    CurrentValue = false,
-    Flag = "F_Attack",
-    Callback = function(v) Config.FastAttack = v end
-})
-
-Tabs.Farming:CreateSlider({
-    Name = "Distancia de Seguridad",
-    Range = {30, 200},
-    Increment = 5,
-    CurrentValue = 65,
-    Callback = function(v) Config.RadioFarm = v end
-})
-
--- // PESTAÑA AUTO PVP (LA JOYA V4)
-Tabs.PVP:CreateSection("Combate de Élite")
-Tabs.PVP:CreateToggle({
-    Name = "AUTO PVP (Predictivo)",
-    CurrentValue = false,
-    Flag = "P_PVP",
-    Callback = function(v) Config.AutoPVP = v end
-})
-
-Tabs.PVP:CreateToggle({
-    Name = "Aimbot Silencioso",
-    CurrentValue = false,
-    Flag = "P_Aim",
-    Callback = function(v) Config.Aimbot = v end
-})
-
--- // PESTAÑA STATS & RAZAS
-Tabs.Stats:CreateSection("Auto Stats")
-Tabs.Stats:CreateToggle({
-    Name = "Auto-Poner Puntos",
-    CurrentValue = false,
-    Flag = "S_Auto",
-    Callback = function(v) Config.AutoStats = v end
-})
-
-Tabs.Stats:CreateDropdown({
-    Name = "Priorizar Stat",
-    Options = {"Melee", "Defense", "Sword", "Blox Fruit"},
-    CurrentValue = "Melee",
-    Flag = "S_Target",
-    Callback = function(v) Config.StatsTarget = v end
-})
-
-Tabs.Stats:CreateSection("Misiones de Raza")
-Tabs.Stats:CreateButton({
-    Name = "Aceptar Reto Raza V3",
-    Callback = function() 
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("Alchemist", "1") -- Ejemplo simplificado
-        Rayfield:Notify({Title = "Raza", Content = "Buscando al Alquimista...", Duration = 3})
+task.spawn(function()
+    while task.wait(1) do
+        local elapsed = os.time() - Session.StartTime
+        local hours = math.floor(elapsed / 3600)
+        local mins = math.floor((elapsed % 3600) / 60)
+        local curLvl = LP.Data.Level.Value
+        StatsLabel:Set({
+            Title = "Estadísticas en Tiempo Real",
+            Content = string.format("Niveles Subidos: %d\nBeli en Sesión: %d\nTiempo: %02d:%02d\nSEA: %s", 
+                curLvl - Session.StartLvl, 
+                LP.Data.Beli.Value - Session.BeliEarned, -- Placeholder for calculation
+                hours, mins,
+                (Workspace:FindFirstChild("Map") and "Detectado" or "Calculando"))
+        })
     end
+end)
+
+-- // PESTAÑA FARMING & MAESTRÍA
+Tabs.Farming:CreateSection("Auto Leveling")
+Tabs.Farming:CreateToggle({Name = "Auto Farm Level", Flag = "LvL", Callback = function(v) Config.AutoLvl = v end})
+
+Tabs.Farming:CreateSection("Auto Maestría Pro")
+Tabs.Farming:CreateDropdown({
+    Name = "Arma a Farmear",
+    Options = {"Melee", "Sword", "Fruit", "Gun"},
+    CurrentValue = "Melee",
+    Flag = "M_Weapon",
+    Callback = function(v) Config.MasteryWeapon = v end
 })
 
--- // PESTAÑA UTILIDADES (SERVER HOP)
-Tabs.Utilidad:CreateSection("Utilidades del Servidor")
-Tabs.Utilidad:CreateButton({
-    Name = "Server Hop (Saltar Server)",
-    Callback = function()
-        local PlaceID = game.PlaceId
-        local AllIDs = {}
-        local foundAnything = ""
-        local actualHour = os.date("!*t").hour
-        local function GetServers(cursor)
-            local url = "https://games.roblox.com/v1/games/" .. PlaceID .. "/servers/Public?sortOrder=Asc&limit=100" .. (cursor and "&cursor=" .. cursor or "")
-            local response = game:HttpGet(url)
-            return HttpService:JSONDecode(response)
-        end
-        local Servers = GetServers()
-        for i,v in pairs(Servers.data) do
-            if v.playing < v.maxPlayers then
-                TeleportService:TeleportToPlaceInstance(PlaceID, v.id, LP)
-                break
+Tabs.Farming:CreateToggle({
+    Name = "Activar Auto Maestría",
+    Flag = "M_Active",
+    Callback = function(v) Config.AutoMastery = v end
+})
+
+-- // PESTAÑA STATS (SELECTIVO)
+Tabs.Stats:CreateSection("Distribución Inteligente")
+Tabs.Stats:CreateToggle({Name = "Melee (Combate)", Callback = function(v) Config.SelectiveStats.Melee = v end})
+Tabs.Stats:CreateToggle({Name = "Defense (Defensa)", Callback = function(v) Config.SelectiveStats.Defense = v end})
+Tabs.Stats:CreateToggle({Name = "Sword (Espada)", Callback = function(v) Config.SelectiveStats.Sword = v end})
+Tabs.Stats:CreateToggle({Name = "Gun (Pistola)", Callback = function(v) Config.SelectiveStats.Gun = v end})
+Tabs.Stats:CreateToggle({Name = "Blox Fruit (Fruta)", Callback = function(v) Config.SelectiveStats.BloxFruit = v end})
+
+-- // PESTAÑA SEGURIDAD & RENDIMIENTO
+Tabs.Seguridad:CreateSection("Optimización FPS")
+Tabs.Seguridad:CreateToggle({
+    Name = "Modo CPU (Remover Texturas)",
+    Callback = function(v) 
+        Config.CPUMode = v 
+        if v then
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if obj:IsA("BasePart") or obj:IsA("Decal") or obj:IsA("Texture") then
+                    obj.Material = Enum.Material.SmoothPlastic
+                    if obj:IsA("Decal") or obj:IsA("Texture") then obj.Transparency = 1 end
+                end
             end
         end
     end
 })
 
-Tabs.Utilidad:CreateButton({
-    Name = "Reincorporarse (Rejoin)",
-    Callback = function() TeleportService:Teleport(game.PlaceId, LP) end
+Tabs.Seguridad:CreateToggle({
+    Name = "Modo Pantalla Blanca (Máximo FPS)",
+    Callback = function(v)
+        Config.WhiteScreen = v
+        game:GetService("RunService"):Set3dRenderingEnabled(not v)
+    end
 })
 
--- // LÓGICA CORE V4 (Optimización Máxima) // --
+Tabs.Seguridad:CreateSection("Anti-Ban / Admin")
+Tabs.Seguridad:CreateToggle({
+    Name = "Detector de Admins (Auto-Leave)",
+    Callback = function(v) Config.AdminDetector = v end
+})
 
-local function getHRP(char) return char and char:FindFirstChild("HumanoidRootPart") end
-
--- ULTRA FAST ATTACK LOOP
+-- // LÓGICA DE MAESTRÍA (V5.0)
 task.spawn(function()
-    while task.wait(Config.AttackSpeed) do
-        if Config.FastAttack and Config.AutoLvl then
+    while task.wait(0.5) do
+        if Config.AutoMastery then
             pcall(function()
-                local combat = ReplicatedStorage.Remotes:FindFirstChild("Validator")
-                if combat then
-                    combat:FireServer("Combat", LP.Character)
-                end
-            end)
-        end
-    end
-end)
-
--- AUTO STATS LOOP
-task.spawn(function()
-    while task.wait(1) do
-        if Config.AutoStats then
-            pcall(function()
-                local puntos = LP.Data.StatsPoints.Value
-                if puntos > 0 then
-                    ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", Config.StatsTarget, puntos)
-                end
-            end)
-        end
-    end
-end)
-
--- AUTO LVL & QUESTS (VERSION 4.0)
-task.spawn(function()
-    while task.wait(0.3) do
-        if Config.AutoLvl then
-            pcall(function()
-                local hasQuest = LP.PlayerGui.Main:FindFirstChild("Quest")
-                if not hasQuest then
-                    -- Lógica de TP a Misión según Nivel (Simplificado)
-                    -- ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", "Bandit", 1)
-                else
-                    for _, en in pairs(Workspace.Enemies:GetChildren()) do
-                        if en:FindFirstChild("Humanoid") and en.Humanoid.Health > 0 then
-                            local hrp = getHRP(LP.Character)
-                            local eHrp = getHRP(en)
-                            if hrp and eHrp then
-                                hrp.CFrame = eHrp.CFrame * CFrame.new(0, 10, 0)
-                                ReplicatedStorage.Remotes.Validator:FireServer(en)
+                for _, enemy in pairs(Workspace.Enemies:GetChildren()) do
+                    if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
+                        local hrp = LP.Character.HumanoidRootPart
+                        local eHrp = enemy.HumanoidRootPart
+                        hrp.CFrame = eHrp.CFrame * CFrame.new(0, 10, 0)
+                        
+                        -- Atacar hasta 15% de vida con Melee
+                        if enemy.Humanoid.Health / enemy.Humanoid.MaxHealth > 0.15 then
+                            ReplicatedStorage.Remotes.Validator:FireServer(enemy)
+                        else
+                            -- Equipar Arma de Maestría y Usar Skill
+                            local weapon = LP.Backpack:FindFirstChild(Config.MasteryWeapon) or LP.Character:FindFirstChild(Config.MasteryWeapon)
+                            if weapon then
+                                LP.Character.Humanoid:EquipTool(weapon)
+                                -- Simulación de input de habilidades
+                                game:GetService("VirtualUser"):CaptureController()
+                                game:GetService("VirtualUser"):SetKeyDown("z")
+                                task.wait(0.1)
+                                game:GetService("VirtualUser"):SetKeyUp("z")
                             end
                         end
                     end
@@ -219,27 +180,46 @@ task.spawn(function()
     end
 end)
 
--- AUTO PVP PREDICTIVO
+-- // LÓGICA AUTO STATS SELECTIVO
 task.spawn(function()
-    while task.wait(0.05) do
-        if Config.AutoPVP then
-            pcall(function()
-                local bestPlayer = nil
-                local shortestDist = math.huge
-                for _, p in pairs(Players:GetPlayers()) do
-                    if p ~= LP and p.Character and getHRP(p.Character) and p.Character.Humanoid.Health > 0 then
-                        local d = (getHRP(p.Character).Position - getHRP(LP.Character).Position).Magnitude
-                        if d < shortestDist then shortestDist = d bestPlayer = p.Character end
-                    end
+    while task.wait(1) do
+        local points = LP.Data.StatsPoints.Value
+        if points > 0 then
+            local targets = {}
+            for k, v in pairs(Config.SelectiveStats) do if v then table.insert(targets, k) end end
+            
+            if #targets > 0 then
+                local perStat = math.floor(points / #targets)
+                for _, stat in ipairs(targets) do
+                    local name = stat == "BloxFruit" and "Blox Fruit" or stat
+                    ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", name, perStat)
                 end
-                if bestPlayer then
-                    local hrp = getHRP(LP.Character)
-                    local tHrp = getHRP(bestPlayer)
-                    hrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 3) -- Posición de combate
-                    if Config.Aimbot then
-                        Workspace.CurrentCamera.CFrame = CFrame.new(Workspace.CurrentCamera.CFrame.Position, tHrp.Position)
-                    end
-                    ReplicatedStorage.Remotes.Validator:FireServer("Combat", bestPlayer)
+            end
+        end
+    end
+end)
+
+-- // DETECTOR DE ADMINS REAL
+task.spawn(function()
+    while task.wait(5) do
+        if Config.AdminDetector then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player:GetRankInGroup(2440505) >= 1 then
+                    LP:Kick("¡BLOXY HUB: ADMIN DETECTADO! (" .. player.Name .. ")")
+                end
+            end
+        end
+    end
+end)
+
+-- // ULTIMATE FAST ATTACK (SAMMIR EDITION)
+task.spawn(function()
+    while task.wait(Config.AttackSpeed) do
+        if Config.FastAttack and (Config.AutoLvl or Config.AutoMastery or Config.KillAura) then
+            pcall(function()
+                local combat = ReplicatedStorage.Remotes:FindFirstChild("Validator")
+                if combat then
+                    combat:FireServer("Combat", LP.Character)
                 end
             end)
         end
