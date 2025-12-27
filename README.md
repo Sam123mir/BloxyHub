@@ -38,7 +38,7 @@
 Copia y pega el siguiente código en tu ejecutor favorito (Delta, Hydrogen, Fluxus, Wave, etc.):
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/TuUsuario/BloxyHub/main/Main.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Sam123mir/BloxyHub/main/Main.lua"))()
 ```
 
 > [!IMPORTANT]
