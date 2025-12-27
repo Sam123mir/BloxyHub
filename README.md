@@ -55,8 +55,8 @@ El script utiliza la librería **Fluent UI**, ofreciendo una estética moderna i
 ---
 
 ## 🤝 Créditos y Soporte
-- **Desarrollador Principal**: [Sammir](https://github.com/TuUsuario)
+- **Desarrollador Principal**: [Sammir](https://github.com/Sam123mir)
 - **Librería UI**: Fluent Community
 
 ---
-*Desarrollado con ❤️ para la comunidad de Bloxy Hub.*
+*Desarrollado con ❤️ para la comunidad de Blox Fruits.*
