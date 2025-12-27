@@ -174,7 +174,15 @@ local Config = {
         CPUMode = false,
         WhiteScreen = false,
         FPSBoost = false,
-        TextureQuality = "High" -- High, Medium, Low, Potato
+        UIRefreshRate = 1.0, -- Throttling suggested in report
+    },
+
+    Quest = {
+        CurrentQuest = nil,
+        CurrentNPC = nil,
+        QuestName = nil,
+        QuestEnemy = nil,
+        TargetLvl = 1
     },
 
     Security = {
@@ -375,6 +383,21 @@ function Utils:TeleportTo(cframe, safeMode)
     end
 end
 
+function Utils:GetEnemyByName(name)
+    local enemies = game:GetService("Workspace").Enemies:GetChildren()
+    for _, enemy in ipairs(enemies) do
+        if enemy.Name == name and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
+            return enemy
+        end
+    end
+    return nil
+end
+
+function Utils:IsLagging()
+    local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+    return ping > 500 -- Lag extremo
+end
+
 function Utils:Equip(toolName)
     pcall(function()
         if toolName == "Melee" then
@@ -525,19 +548,24 @@ end
 
 function Combat:AttackEnemy(enemy)
     if not enemy or not enemy:FindFirstChild("HumanoidRootPart") then return end
+    if Utils:IsLagging() then 
+        Session.Status = "Lag detectado - Pausando..."
+        return 
+    end
     
     pcall(function()
-        -- Posicionamiento estratégico
         local enemyHRP = enemy.HumanoidRootPart
-        Utils:TeleportTo(enemyHRP.CFrame, Config.AutoFarm.SafeMode)
+        local dist = (Character.HumanoidRootPart.Position - enemyHRP.Position).Magnitude
         
-        -- Sistema de ataque múltiple
-        for i = 1, 3 do
-            self:FastAttack()
-            task.wait(Config.Combat.AttackSpeed)
+        -- Solo teletransportar si estamos lejos (Optimización Reporte Técnico)
+        if dist > 15 then
+            Utils:TeleportTo(enemyHRP.CFrame * CFrame.new(0, 10, 0), Config.AutoFarm.SafeMode)
         end
         
-        -- Actualizar estadísticas
+        -- Ejecutar ataques rápidos (Throttling)
+        self:FastAttack()
+        
+        -- Actualizar estadísticas al morir
         if enemy.Humanoid.Health <= 0 then
             Session.MobsKilled = Session.MobsKilled + 1
         end
@@ -578,23 +606,87 @@ function Combat:KillAura()
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- MÓDULO: AUTO FARM SYSTEM
+-- MÓDULO: QUEST DATA (Base de Datos de Misiones)
 -- ═══════════════════════════════════════════════════════════════
 
-local Farming = {}
+local QuestData = {
+    [1] = { -- First Sea
+        {NPC = "Bandit Quest Giver", Quest = "BanditQuest1", Enemy = "Bandit", Level = 0, CFrame = CFrame.new(1059, 15, 1549)},
+        {NPC = "Monkey Quest Giver", Quest = "MonkeyQuest1", Enemy = "Monkey", Level = 10, CFrame = CFrame.new(-1598, 37, 153)},
+        {NPC = "Monkey Quest Giver", Quest = "GorillaQuest1", Enemy = "Gorilla", Level = 15, CFrame = CFrame.new(-1598, 37, 153)},
+        {NPC = "Pirate Quest Giver", Quest = "PirateQuest1", Enemy = "Pirate", Level = 35, CFrame = CFrame.new(-1140, 4, 3828)},
+        {NPC = "Pirate Quest Giver", Quest = "BruteQuest1", Enemy = "Brute", Level = 45, CFrame = CFrame.new(-1140, 4, 3828)},
+        {NPC = "Desert Quest Giver", Quest = "DesertQuest1", Enemy = "Desert Bandit", Level = 60, CFrame = CFrame.new(894, 6, 4390)},
+        {NPC = "Desert Quest Giver", Quest = "DesertQuest2", Enemy = "Desert Officer", Level = 75, CFrame = CFrame.new(894, 6, 4390)},
+    },
+    [2] = { -- Second Sea
+        {NPC = "Quest Giver", Quest = "RaiderQuest1", Enemy = "Raider", Level = 700, CFrame = CFrame.new(-426, 73, 1836)},
+        {NPC = "Quest Giver", Quest = "RaiderQuest2", Enemy = "Mercenary", Level = 725, CFrame = CFrame.new(-426, 73, 1836)},
+        {NPC = "Quest Giver", Quest = "SwanQuest1", Enemy = "Swan Pirate", Level = 775, CFrame = CFrame.new(-628, 15, 1572)},
+    },
+    [3] = { -- Third Sea
+        {NPC = "Quest Giver", Quest = "MarineQuest1", Enemy = "Marine Cadet", Level = 1500, CFrame = CFrame.new(-9506, 164, 5786)},
+        {NPC = "Quest Giver", Quest = "MarineQuest2", Enemy = "Marine Captain", Level = 1525, CFrame = CFrame.new(-9506, 164, 5786)},
+    }
+}
+
+function Farming:GetBestQuest()
+    local myLvl = LocalPlayer.Data.Level.Value
+    local world, _ = Utils:GetCurrentWorld()
+    local worldQuests = QuestData[world] or {}
+    
+    local best = worldQuests[1]
+    for _, q in ipairs(worldQuests) do
+        if myLvl >= q.Level then
+            best = q
+        end
+    end
+    return best
+end
+
+function Farming:CheckQuest()
+    local questName = LocalPlayer.PlayerGui.Main:FindFirstChild("Quest")
+    if questName and questName.Visible then
+        return true
+    end
+    return false
+end
+
+function Farming:TakeQuest()
+    if self:CheckQuest() then return end
+    
+    local best = self:GetBestQuest()
+    if not best then return end
+    
+    Session.Status = "Viajando a NPC: " .. best.NPC
+    Utils:TeleportTo(best.CFrame)
+    
+    -- Interactuar con NPC (Simplificado por Remoto si es posible o Click)
+    pcall(function()
+        Services.ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", best.Quest, 1)
+    end)
+end
 
 function Farming:AutoLevel()
     if not Config.AutoFarm.Enabled or Config.AutoFarm.Mode ~= "Level" then return end
     
-    local enemy, distance = Utils:GetClosestEnemy(500)
+    if not self:CheckQuest() then
+        self:TakeQuest()
+        return
+    end
+    
+    local best = self:GetBestQuest()
+    local enemy = Utils:GetEnemyByName(best.Enemy) or Utils:GetClosestEnemy(1000)
     
     if enemy then
-        Utils:Equip("Melee") -- Equipar Melee por predeterminado
+        Utils:Equip("Melee")
         Combat:AttackEnemy(enemy)
         
         if Config.Mastery.Enabled then
             Combat:ExecuteMasteryFinisher(enemy)
         end
+    else
+        Session.Status = "Esperando respawn de " .. best.Enemy
     end
 end
 
@@ -1135,13 +1227,35 @@ LogSection:AddButton({
     Callback = function()
         pcall(function()
             local allLogs = table.concat(LogSystem.Entries, "\n")
-            local copyFunc = setclipboard or toclipboard or set_clipboard or (Clipboard and Clipboard.set)
             
-            if copyFunc then
-                copyFunc(allLogs)
+            -- Fix Portapapeles Robusto (Multi-método con fallback visual)
+            local success = false
+            local methods = {
+                setclipboard, 
+                toclipboard, 
+                set_clipboard, 
+                (Clipboard and Clipboard.set),
+                function(text) -- Fallback para algunos ejecutores móviles
+                    local box = Instance.new("TextBox")
+                    box.Parent = game.CoreGui
+                    box.Text = text
+                    box.Visible = false
+                    box:CaptureFocus()
+                    return true
+                end
+            }
+            
+            for _, method in ipairs(methods) do
+                if method then
+                    local s, _ = pcall(function() method(allLogs) end)
+                    if s then success = true break end
+                end
+            end
+            
+            if success then
                 Utils:Notify("Logs", "Historial copiado al portapapeles", 2)
             else
-                Utils:Notify("Logs", "Tu ejecutor no soporta copiado", 2)
+                Utils:Notify("Error", "No se pudo copiar. Intenta manualmente.", 3)
             end
         end)
     end
@@ -1163,14 +1277,14 @@ ConfigSection:AddButton({
     Callback = function()
         Utils:Notify("Sistema", "Reiniciando en 3 segundos...", 3)
         task.wait(3)
-        getgenv().BloxyElite.Restart()
+        getgenv().BloxyHub.Restart()
     end
 })
 
 ConfigSection:AddButton({
     Title = "❌ Cerrar Script",
     Callback = function()
-        getgenv().BloxyElite.Shutdown()
+        getgenv().BloxyHub.Shutdown()
     end
 })
 
@@ -1265,7 +1379,7 @@ ThreadManager:Register("SecurityManager", function()
     task.wait(2)
 end)
 
--- Loop: Actualización de UI (Dashboard)
+-- Loop: Actualización de UI (Dashboard) - Prioridad Baja
 ThreadManager:Register("UIUpdate", function()
     pcall(function()
         Session:Update()
@@ -1292,7 +1406,7 @@ ThreadManager:Register("UIUpdate", function()
             ))
         end
     end)
-    task.wait(1)
+    task.wait(Config.Performance.UIRefreshRate or 1.5) -- Throttling dinámico
 end)
 
 -- ═══════════════════════════════════════════════════════════════
@@ -1326,6 +1440,39 @@ end
 -- ═══════════════════════════════════════════════════════════════
 -- INICIALIZACIÓN FINAL
 -- ═══════════════════════════════════════════════════════════════
+
+-- Botón Flotante para Móvil (Floating Action Button)
+local function CreateFloatingButton()
+    local ScreenGui = Instance.new("ScreenGui")
+    local Button = Instance.new("ImageButton")
+    local Corner = Instance.new("UICorner")
+    
+    ScreenGui.Name = "TitaniumMobileToggle"
+    ScreenGui.Parent = game.CoreGui
+    ScreenGui.ResetOnSpawn = false
+    
+    Button.Name = "ToggleButton"
+    Button.Parent = ScreenGui
+    Button.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    Button.BackgroundTransparency = 0.4
+    Button.Position = UDim2.new(0, 20, 0.5, -25)
+    Button.Size = UDim2.new(0, 50, 0, 50)
+    Button.Image = "rbxassetid://4483362458" -- Logo del Hub
+    Button.Draggable = true -- Soporte básico para moverlo
+    
+    Corner.CornerRadius = UDim.new(1, 0)
+    Corner.Parent = Button
+    
+    Button.MouseButton1Click:Connect(function()
+        if Window then
+            Window:Minimize() -- Alterna visibilidad de Fluent
+        end
+    end)
+end
+
+if Services.UserInputService.TouchEnabled then
+    CreateFloatingButton()
+end
 
 getgenv().BloxyHub.Active = true
 
