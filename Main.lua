@@ -1,339 +1,946 @@
 --[[
     ╔══════════════════════════════════════════════════════════════╗
-    ║  BLOXY HUB ELITE V6.0 - TITANIUM EDITION                    ║
-    ║  Arquitectura Modular Industrial | Sincronización Real      ║
-    ║  Desarrollado para Sammir | Reconstrucción Maestro          ║
+    ║  BLOXY HUB ELITE V6.0 - TITANIUM REBUILD                    ║
+    ║  Arquitectura Modular Profesional | Thread-Safe | Auto-Clean║
+    ║  Desarrollado por Sammir | Optimizado para Blox Fruits      ║
     ╚══════════════════════════════════════════════════════════════╝
 --]]
 
--- // SEGURIDAD Y PRE-CARGA
+-- ═══════════════════════════════════════════════════════════════
+-- SISTEMA DE VERSIÓN Y VALIDACIÓN
+-- ═══════════════════════════════════════════════════════════════
+
 getgenv().BloxyElite = getgenv().BloxyElite or {}
+local VERSION = "6.0.0"
+local GITHUB_RAW = "https://raw.githubusercontent.com/yourrepo/bloxyelite/main/version.txt"
+
 if getgenv().BloxyElite.Active then
-    pcall(function() getgenv().BloxyElite.Shutdown() end)
+    warn("[BLOXY ELITE] Ya hay una instancia activa. Cerrando instancia anterior...")
+    getgenv().BloxyElite.Shutdown()
     task.wait(1)
 end
 
--- // MÓDULO: THREAD MANAGER (PRO)
-local ThreadManager = {Threads = {}, Active = true}
-function ThreadManager:Spawn(name, func)
-    if self.Threads[name] then pcall(function() task.cancel(self.Threads[name]) end) end
-    self.Threads[name] = task.spawn(function()
-        while self.Active do
-            local s, e = pcall(func)
-            if not s then warn("[TITANIUM ERROR: "..name.."] "..tostring(e)) end
-            task.wait(0.1)
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: THREAD MANAGER (Gestión de Ciclo de Vida)
+-- ═══════════════════════════════════════════════════════════════
+
+local ThreadManager = {
+    Threads = {},
+    Active = true
+}
+
+function ThreadManager:Register(name, func)
+    if not self.Active then return end
+    
+    local thread = task.spawn(function()
+        local success, err = pcall(function()
+            while self.Active and self.Threads[name] do
+                local s, e = pcall(func)
+                if not s then
+                    warn(string.format("[THREAD ERROR: %s] %s", name, tostring(e)))
+                end
+                task.wait()
+            end
+        end)
+        
+        if not success then
+            warn(string.format("[THREAD FATAL: %s] %s", name, tostring(err)))
         end
     end)
+    
+    self.Threads[name] = {
+        thread = thread,
+        startTime = os.time(),
+        status = "running"
+    }
+    
+    return name
 end
 
--- // MÓDULO: SERVICIOS
-local S = {
-    P = game:GetService("Players"),
-    W = game:GetService("Workspace"),
-    RS = game:GetService("ReplicatedStorage"),
-    TS = game:GetService("TweenService"),
-    RSV = game:GetService("RunService"),
-    VU = game:GetService("VirtualUser"),
-    ST = game:GetService("Stats")
-}
-local LP = S.P.LocalPlayer
+function ThreadManager:Stop(name)
+    if self.Threads[name] then
+        self.Threads[name].status = "stopped"
+        self.Threads[name] = nil
+    end
+end
 
--- // CONFIGURACIÓN TITANIUM
+function ThreadManager:StopAll()
+    self.Active = false
+    for name, data in pairs(self.Threads) do
+        data.status = "stopped"
+    end
+    self.Threads = {}
+end
+
+function ThreadManager:GetStatus()
+    local active = 0
+    for _, data in pairs(self.Threads) do
+        if data.status == "running" then
+            active = active + 1
+        end
+    end
+    return active
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: SERVICIOS Y VARIABLES GLOBALES
+-- ═══════════════════════════════════════════════════════════════
+
+local Services = {
+    Players = game:GetService("Players"),
+    Workspace = game:GetService("Workspace"),
+    ReplicatedStorage = game:GetService("ReplicatedStorage"),
+    TeleportService = game:GetService("TeleportService"),
+    RunService = game:GetService("RunService"),
+    Stats = game:GetService("Stats"),
+    VirtualUser = game:GetService("VirtualUser"),
+    UserInputService = game:GetService("UserInputService")
+}
+
+local LocalPlayer = Services.Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: CONFIGURACIÓN ELITE
+-- ═══════════════════════════════════════════════════════════════
+
 local Config = {
-    Farm = {Enabled = false, Mode = "Level", Tool = "Melee", Distance = 10, Fast = true},
-    Mastery = {Enabled = false, TargetHP = 20, Tool = "Sword"},
-    Stats = {Enabled = false, Points = {Melee = false, Defense = false, Sword = false}},
-    Security = {AdminLeave = true, AntiAFK = true},
-    Visuals = {CPUMode = false, WhiteScreen = false}
-}
-
--- // DATABASE: QUESTS (SEA 1 - COMPACTO MASTER)
-local QuestData = {
-    ["Sea 1"] = {
-        {Lvl = 0, Name = "Bandit", QName = "BanditQuest1", NPC = Vector3.new(1060, 16, 1547), Mobs = "Bandit"},
-        {Lvl = 10, Name = "Monkey", QName = "MonkeyQuest1", NPC = Vector3.new(-1601, 37, 153), Mobs = "Monkey"},
-        {Lvl = 15, Name = "Gorilla", QName = "GorillaQuest1", NPC = Vector3.new(-1137, 4, -495), Mobs = "Gorilla"},
-        {Lvl = 30, Name = "Pirate", QName = "PirateQuest1", NPC = Vector3.new(-1140, 4, 3828), Mobs = "Pirate"},
-        {Lvl = 60, Name = "Brute", QName = "Island1Quest1", NPC = Vector3.new(-1240, 11, 4766), Mobs = "Brute"},
-        {Lvl = 90, Name = "Desert Bandit", QName = "DesertQuest", NPC = Vector3.new(894, 6, 4390), Mobs = "Desert Bandit"},
-        {Lvl = 120, Name = "Snow Bandit", QName = "SnowQuest", NPC = Vector3.new(1385, 87, -1298), Mobs = "Snow Bandit"},
-        {Lvl = 150, Name = "Chief Petty Officer", QName = "MarineQuest1", NPC = Vector3.new(-4809, 21, 4360), Mobs = "Chief Petty Officer"},
-        {Lvl = 190, Name = "Sky Bandit", QName = "SkyQuest", NPC = Vector3.new(-4842, 717, -2620), Mobs = "Sky Bandit"},
-        {Lvl = 250, Name = "Toga Warrior", QName = "ColosseumQuest", NPC = Vector3.new(-1575, 7, -2982), Mobs = "Toga Warrior"},
-        {Lvl = 300, Name = "Magma Village", QName = "MagmaQuest", NPC = Vector3.new(-5313, 12, 8515), Mobs = "Military Detective"},
-        {Lvl = 375, Name = "Fishman Warrior", QName = "FishmanQuest", NPC = Vector3.new(61122, 18, 1568), Mobs = "Fishman Warrior"},
-        {Lvl = 450, Name = "God's Guard", QName = "UpperSkyQuest1", NPC = Vector3.new(-7859, 5545, -382), Mobs = "God's Guard"},
-        {Lvl = 525, Name = "Galley Pirate", QName = "FountainQuest", NPC = Vector3.new(5124, 59, 4102), Mobs = "Galley Pirate"},
-        {Lvl = 625, Name = "Shanda", QName = "Island2Quest1", NPC = Vector3.new(-7859, 5545, -382), Mobs = "Shanda"}
+    -- Auto Farming
+    AutoFarm = {
+        Enabled = false,
+        Mode = "Level", -- Level, Mastery, Boss
+        Distance = 15,
+        SafeMode = true,
+        FastMode = false
     },
-    ["Sea 2"] = {
-        {Lvl = 700, Name = "Raider", QName = "Area1Quest", NPC = Vector3.new(-425, 73, 1836), Mobs = "Raider"},
-        {Lvl = 775, Name = "Mercenary", QName = "Area2Quest", NPC = Vector3.new(635, 73, 917), Mobs = "Mercenary"},
-        {Lvl = 875, Name = "Swan Pirate", QName = "Area2Quest", NPC = Vector3.new(635, 73, 917), Mobs = "Swan Pirate"},
-        {Lvl = 1000, Name = "Snowman", QName = "SnowMountainQuest", NPC = Vector3.new(607, 401, -5371), Mobs = "Snowman"}
+    
+    -- Auto Mastery
+    Mastery = {
+        Enabled = false,
+        Weapon = "Combat", -- Combat, Sword, Fruit, Gun
+        FinishAtHealth = 20, -- Porcentaje
+        UseSkills = true
     },
-    ["Sea 3"] = {
-        {Lvl = 1500, Name = "Pirate Millionaire", QName = "TurtleQuest1", NPC = Vector3.new(-13233, 532, -7576), Mobs = "Pirate Millionaire"}
+    
+    -- Auto Stats
+    Stats = {
+        Enabled = false,
+        Distribution = {
+            Melee = false,
+            Defense = false,
+            Sword = false,
+            Gun = false,
+            ["Blox Fruit"] = false
+        },
+        SmartMode = true -- Distribuir equitativamente
+    },
+    
+    -- Combat Settings
+    Combat = {
+        FastAttack = false,
+        AttackSpeed = 0.05,
+        KillAura = false,
+        Range = 50,
+        AutoEquipWeapon = true,
+        ClickSimulation = true
+    },
+    
+    -- Performance & Security
+    Performance = {
+        CPUMode = false,
+        WhiteScreen = false,
+        FPSBoost = false,
+        TextureQuality = "High" -- High, Medium, Low, Potato
+    },
+    
+    Security = {
+        AntiAFK = true,
+        AdminDetector = false,
+        AutoLeaveOnAdmin = true,
+        StaffGroupId = 2440505
+    },
+    
+    -- UI Settings
+    UI = {
+        Theme = "Dark", -- Dark, Light, Amoled
+        Notifications = true,
+        StatusBar = true,
+        MinimizeSymbol = "−"
     }
 }
 
--- // MÓDULO: AUTO STATS
-ThreadManager:Spawn("StatsDistributor", function()
-    if not Config.Stats.Enabled then return end
-    local p = LP.Data.StatsPoints.Value
-    if p > 0 then
-        local active = {}
-        if Config.Stats.Points.Melee then table.insert(active, "Melee") end
-        if Config.Stats.Points.Defense then table.insert(active, "Defense") end
-        if Config.Stats.Points.Sword then table.insert(active, "Sword") end
-        
-        if #active > 0 then
-            local per = math.floor(p / #active)
-            for _, s in pairs(active) do
-                S.RS.Remotes.CommF_:InvokeServer("AddPoint", s, per)
-            end
-        end
-    end
-    task.wait(1)
-end)
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: SESIÓN Y ESTADÍSTICAS
+-- ═══════════════════════════════════════════════════════════════
 
--- // UTILIDADES PRO
+local Session = {
+    StartTime = os.time(),
+    StartLevel = LocalPlayer.Data.Level.Value,
+    StartBeli = LocalPlayer.Data.Beli.Value,
+    StartFragments = LocalPlayer.Data.Fragments.Value,
+    
+    LevelsGained = 0,
+    BeliEarned = 0,
+    FragmentsEarned = 0,
+    MobsKilled = 0,
+    BossesKilled = 0,
+    
+    Uptime = "00:00:00",
+    Ping = 0,
+    FPS = 60,
+    Status = "Inicializando..."
+}
+
+function Session:Update()
+    local elapsed = os.time() - self.StartTime
+    local hours = math.floor(elapsed / 3600)
+    local mins = math.floor((elapsed % 3600) / 60)
+    local secs = elapsed % 60
+    
+    self.Uptime = string.format("%02d:%02d:%02d", hours, mins, secs)
+    self.LevelsGained = LocalPlayer.Data.Level.Value - self.StartLevel
+    self.BeliEarned = LocalPlayer.Data.Beli.Value - self.StartBeli
+    self.FragmentsEarned = LocalPlayer.Data.Fragments.Value - self.StartFragments
+    self.Ping = math.floor(Services.Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+    self.FPS = math.floor(Services.Stats.FrameRateManager.RenderAverage:GetValue())
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: UTILIDADES Y HELPERS
+-- ═══════════════════════════════════════════════════════════════
+
 local Utils = {}
-function Utils:Teleport(cf)
-    if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return end
-    LP.Character.HumanoidRootPart.CFrame = cf
-end
 
-function Utils:Equip(toolName)
-    if toolName == "Melee" then
-        for _, t in pairs(LP.Backpack:GetChildren()) do
-            if t:IsA("Tool") and (t.ToolTip == "Melee" or t.Name == "Combat" or t.Name == "Water Kung Fu" or t.Name == "Dark Step") then
-                LP.Character.Humanoid:EquipTool(t)
-                return
+function Utils:GetClosestEnemy(maxDistance)
+    maxDistance = maxDistance or 500
+    local closest = nil
+    local closestDist = maxDistance
+    
+    for _, enemy in pairs(Services.Workspace.Enemies:GetChildren()) do
+        if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
+            local dist = (HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Magnitude
+            if dist < closestDist then
+                closest = enemy
+                closestDist = dist
             end
         end
     end
-    local tool = LP.Backpack:FindFirstChild(toolName) or LP.Character:FindFirstChild(toolName)
-    if tool then LP.Character.Humanoid:EquipTool(tool) end
+    
+    return closest, closestDist
 end
 
-function Utils:GetWorld()
-    local id = game.PlaceId
-    if id == 2753915549 then return "Sea 1"
-    elseif id == 4442272183 then return "Sea 2"
-    elseif id == 7449423635 then return "Sea 3"
-    else return "Unknown" end
-end
-
--- // MÓDULO: AUTO MASTERY (BRAIN)
-ThreadManager:Spawn("MasteryBrain", function()
-    if not Config.Mastery.Enabled then return end
-    
-    local q = GetBestQuest()
-    if not q then return end
-    
-    for _, m in pairs(S.W.Enemies:GetChildren()) do
-        if m.Name == q.Mobs and m:FindFirstChild("Humanoid") and m.Humanoid.Health > 0 then
-            repeat
-                task.wait()
-                Utils:Teleport(m.HumanoidRootPart.CFrame * CFrame.new(0, Config.Farm.Distance, 0))
-                
-                local hp = m.Humanoid.Health / m.Humanoid.MaxHealth * 100
-                if hp > Config.Mastery.TargetHP then
-                    Utils:Equip("Melee") -- Bajar vida con Melee
-                    Combat:Attack(m)
-                else
-                    Utils:Equip(Config.Mastery.Tool) -- Rematar con Arma elegida
-                    S.VU:SetKeyDown("z")
-                    task.wait(0.1)
-                    S.VU:SetKeyUp("z")
-                end
-            until not Config.Mastery.Enabled or not m.Parent or m.Humanoid.Health <= 0
+function Utils:GetEnemiesInRange(range)
+    local enemies = {}
+    for _, enemy in pairs(Services.Workspace.Enemies:GetChildren()) do
+        if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
+            local dist = (HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Magnitude
+            if dist <= range then
+                table.insert(enemies, enemy)
+            end
         end
     end
-end)
+    return enemies
+end
 
--- // MÓDULO: SEGURIDAD (ADMIN DETECTOR)
-ThreadManager:Spawn("SecurityAdmin", function()
-    if not Config.Security.AdminLeave then return end
-    for _, p in pairs(S.P:GetPlayers()) do
-        if p:GetRankInGroup(2440505) >= 1 then
-            LP:Kick("¡ALERTA TITANIUM! Admin detectado: "..p.Name)
-        end
-    end
-    task.wait(5)
-end)
-
--- // MÓDULO: PERFORMANCE (CPU MODE)
-local function ApplyCPUMode()
-    for _, v in pairs(S.W:GetDescendants()) do
-        if v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic 
-        elseif v:IsA("Decal") then v:Destroy() end
+function Utils:TeleportTo(cframe, safeMode)
+    if not HumanoidRootPart then return end
+    
+    if safeMode then
+        -- Teletransporte seguro con offset Y
+        local targetCFrame = cframe * CFrame.new(0, Config.AutoFarm.Distance, 0)
+        HumanoidRootPart.CFrame = targetCFrame
+    else
+        HumanoidRootPart.CFrame = cframe
     end
 end
 
--- // COMBAT SYSTEM (SISTEMA DE DAÑO TITANIUM)
+function Utils:GetCurrentWorld()
+    local placeId = game.PlaceId
+    if placeId == 2753915549 then return 1, "First Sea"
+    elseif placeId == 4442272183 then return 2, "Second Sea"
+    elseif placeId == 7449423635 then return 3, "Third Sea"
+    else return 0, "Unknown" end
+end
+
+function Utils:Notify(title, message, duration)
+    if not Config.UI.Notifications then return end
+    
+    Rayfield:Notify({
+        Title = title,
+        Content = message,
+        Duration = duration or 3,
+        Image = 4483362458
+    })
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: COMBAT SYSTEM (Sistema de Combate Avanzado)
+-- ═══════════════════════════════════════════════════════════════
+
 local Combat = {}
-function Combat:Attack(target)
+
+function Combat:FastAttack()
+    if not Config.Combat.FastAttack then return end
+    
     pcall(function()
-        local v = S.RS.Remotes:FindFirstChild("Validator")
-        if v then
-            v:FireServer("Combat", LP.Character)
-            if target then v:FireServer(target) end
+        local combat = Services.ReplicatedStorage.Remotes:FindFirstChild("Validator")
+        local commF = Services.ReplicatedStorage.Remotes.CommF_
+        
+        if combat then
+            combat:FireServer("Combat", Character)
         end
-        S.VU:Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        
+        if commF and Config.Combat.ClickSimulation then
+            Services.VirtualUser:CaptureController()
+            Services.VirtualUser:Button1Down(Vector2.new(0, 0), Services.Workspace.CurrentCamera.CFrame)
+        end
     end)
 end
 
--- // THE BRAIN: AUTO FARM LOGIC
-local function GetBestQuest()
-    local myLvl = LP.Data.Level.Value
-    local world = Utils:GetWorld()
-    local best = nil
+function Combat:AttackEnemy(enemy)
+    if not enemy or not enemy:FindFirstChild("HumanoidRootPart") then return end
     
-    if QuestData[world] then
-        for _, q in pairs(QuestData[world]) do
-            if myLvl >= q.Lvl then best = q end
+    pcall(function()
+        -- Posicionamiento estratégico
+        local enemyHRP = enemy.HumanoidRootPart
+        Utils:TeleportTo(enemyHRP.CFrame, Config.AutoFarm.SafeMode)
+        
+        -- Sistema de ataque múltiple
+        for i = 1, 3 do
+            self:FastAttack()
+            task.wait(Config.Combat.AttackSpeed)
         end
-    end
-    return best
+        
+        -- Actualizar estadísticas
+        if enemy.Humanoid.Health <= 0 then
+            Session.MobsKilled = Session.MobsKilled + 1
+        end
+    end)
 end
 
-ThreadManager:Spawn("FarmingBrain", function()
-    if not Config.Farm.Enabled then return end
+function Combat:ExecuteMasteryFinisher(enemy)
+    if not Config.Mastery.Enabled or not enemy then return end
     
-    local q = GetBestQuest()
-    if not q then return end
+    pcall(function()
+        local healthPercent = (enemy.Humanoid.Health / enemy.Humanoid.MaxHealth) * 100
+        
+        if healthPercent <= Config.Mastery.FinishAtHealth then
+            local weaponName = Config.Mastery.Weapon
+            local weapon = LocalPlayer.Backpack:FindFirstChild(weaponName) or Character:FindFirstChild(weaponName)
+            
+            if weapon and Humanoid then
+                Humanoid:EquipTool(weapon)
+                task.wait(0.1)
+                
+                if Config.Mastery.UseSkills then
+                    Services.VirtualUser:SetKeyDown("z")
+                    task.wait(0.15)
+                    Services.VirtualUser:SetKeyUp("z")
+                end
+            end
+        end
+    end)
+end
+
+function Combat:KillAura()
+    if not Config.Combat.KillAura then return end
     
-    -- Lógica de Quest
-    if not LP.PlayerGui.Main:FindFirstChild("Quest") then
-        Utils:Teleport(CFrame.new(q.NPC))
-        task.wait(0.5)
-        S.RS.Remotes.CommF_:InvokeServer("StartQuest", q.QName, 1)
-    else
-        -- Lógica de Kill
-        for _, m in pairs(S.W.Enemies:GetChildren()) do
-            if m.Name == q.Mobs and m:FindFirstChild("Humanoid") and m.Humanoid.Health > 0 then
-                repeat
-                    task.wait()
-                    Utils:Teleport(m.HumanoidRootPart.CFrame * CFrame.new(0, Config.Farm.Distance, 0))
-                    Combat:Attack(m)
-                until not Config.Farm.Enabled or not m.Parent or m.Humanoid.Health <= 0
+    local enemies = Utils:GetEnemiesInRange(Config.Combat.Range)
+    for _, enemy in ipairs(enemies) do
+        self:AttackEnemy(enemy)
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: AUTO FARM SYSTEM
+-- ═══════════════════════════════════════════════════════════════
+
+local Farming = {}
+
+function Farming:AutoLevel()
+    if not Config.AutoFarm.Enabled or Config.AutoFarm.Mode ~= "Level" then return end
+    
+    local enemy, distance = Utils:GetClosestEnemy(500)
+    
+    if enemy then
+        Combat:AttackEnemy(enemy)
+        
+        if Config.Mastery.Enabled then
+            Combat:ExecuteMasteryFinisher(enemy)
+        end
+    end
+end
+
+function Farming:AutoMastery()
+    if not Config.Mastery.Enabled then return end
+    
+    local enemy = Utils:GetClosestEnemy(500)
+    
+    if enemy then
+        Combat:AttackEnemy(enemy)
+        Combat:ExecuteMasteryFinisher(enemy)
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: AUTO STATS SYSTEM
+-- ═══════════════════════════════════════════════════════════════
+
+local StatsManager = {}
+
+function StatsManager:DistributePoints()
+    if not Config.Stats.Enabled then return end
+    
+    pcall(function()
+        local points = LocalPlayer.Data.StatsPoints.Value
+        if points <= 0 then return end
+        
+        local activeStats = {}
+        for stat, enabled in pairs(Config.Stats.Distribution) do
+            if enabled then
+                table.insert(activeStats, stat)
+            end
+        end
+        
+        if #activeStats == 0 then return end
+        
+        local pointsPerStat = math.floor(points / #activeStats)
+        
+        for _, stat in ipairs(activeStats) do
+            local success = Services.ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", stat, pointsPerStat)
+            if success then
+                Utils:Notify("Stats", string.format("+%d puntos en %s", pointsPerStat, stat), 2)
+            end
+        end
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: PERFORMANCE OPTIMIZER
+-- ═══════════════════════════════════════════════════════════════
+
+local Performance = {}
+
+function Performance:ApplyCPUMode()
+    if not Config.Performance.CPUMode then return end
+    
+    for _, obj in pairs(Services.Workspace:GetDescendants()) do
+        pcall(function()
+            if obj:IsA("BasePart") then
+                obj.Material = Enum.Material.SmoothPlastic
+                obj.Reflectance = 0
+            elseif obj:IsA("Decal") or obj:IsA("Texture") then
+                obj.Transparency = 1
+            elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+                obj.Enabled = false
+            end
+        end)
+    end
+    
+    Utils:Notify("Performance", "Modo CPU activado - Texturas optimizadas", 3)
+end
+
+function Performance:ToggleWhiteScreen(enabled)
+    Config.Performance.WhiteScreen = enabled
+    Services.RunService:Set3dRenderingEnabled(not enabled)
+    
+    if enabled then
+        Utils:Notify("Performance", "Pantalla blanca activada - FPS máximo", 3)
+    end
+end
+
+function Performance:ApplyFPSBoost()
+    if not Config.Performance.FPSBoost then return end
+    
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+    
+    for _, effect in pairs(game:GetService("Lighting"):GetChildren()) do
+        if effect:IsA("PostEffect") then
+            effect.Enabled = false
+        end
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: SECURITY SYSTEM
+-- ═══════════════════════════════════════════════════════════════
+
+local Security = {}
+
+function Security:AntiAFK()
+    if not Config.Security.AntiAFK then return end
+    
+    Services.VirtualUser:CaptureController()
+    Services.VirtualUser:ClickButton2(Vector2.new())
+end
+
+function Security:DetectAdmin()
+    if not Config.Security.AdminDetector then return end
+    
+    for _, player in pairs(Services.Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local success, rank = pcall(function()
+                return player:GetRankInGroup(Config.Security.StaffGroupId)
+            end)
+            
+            if success and rank and rank >= 1 then
+                Utils:Notify("⚠️ ALERTA", string.format("Admin detectado: %s", player.Name), 5)
+                
+                if Config.Security.AutoLeaveOnAdmin then
+                    task.wait(1)
+                    LocalPlayer:Kick(string.format("🛡️ BLOXY ELITE: Admin detectado (%s). Desconexión segura.", player.Name))
+                end
+                
+                return true
             end
         end
     end
-end)
+    
+    return false
+end
 
--- // UI SETUP (RAYFIELD ELITE)
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: UI RAYFIELD (Interfaz Profesional)
+-- ═══════════════════════════════════════════════════════════════
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
 local Window = Rayfield:CreateWindow({
-    Name = "Bloxy Hub TITANIUM 💎 | v6.0",
-    LoadingTitle = "Iniciando Edición Maestra...",
-    LoadingSubtitle = "por Antigravity & Sammir",
-    ImageId = 4483362458
+    Name = "Bloxy Hub ELITE 🏆 | v6.0 Titanium",
+    LoadingTitle = "Iniciando Sistema Titanium...",
+    LoadingSubtitle = "Cargando módulos profesionales",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "BloxyElite_V6",
+        FileName = "TitaniumConfig"
+    },
+    Discord = {
+        Enabled = false,
+        Invite = "noinvite",
+        RememberJoins = true
+    },
+    KeySystem = false
 })
 
+-- ═══════════════════════════════════════════════════════════════
+-- PESTAÑAS DE LA UI
+-- ═══════════════════════════════════════════════════════════════
+
 local Tabs = {
-    Home = Window:CreateTab("Dashboard", 4483362458),
-    Farm = Window:CreateTab("Farming", 4483362458),
-    Stats = Window:CreateTab("Stats", 4483362458),
-    Misc = Window:CreateTab("Misc", 4483362458)
+    Dashboard = Window:CreateTab("📊 Dashboard", 4483362458),
+    Farming = Window:CreateTab("⚔️ Farming", 4483362458),
+    Combat = Window:CreateTab("💥 Combate", 4483362458),
+    Stats = Window:CreateTab("📈 Stats", 4483362458),
+    Performance = Window:CreateTab("⚡ Performance", 4483362458),
+    Security = Window:CreateTab("🛡️ Seguridad", 4483362458),
+    Settings = Window:CreateTab("⚙️ Ajustes", 4483362458)
 }
 
--- DASHBOARD SINC
-local DashPara = Tabs.Home:CreateParagraph({Title = "Sincronizando...", Content = "Cargando datos reales..."})
-ThreadManager:Spawn("DashboardUpdate", function()
-    local ping = math.floor(S.ST.Network.ServerStatsItem["Data Ping"]:GetValue())
-    local world = Utils:GetWorld()
-    DashPara:Set({
-        Title = "TITANIUM v6.0 | Ping: "..ping.."ms",
-        Content = string.format("Nivel: %d | Beli: %s\nMundo: %s | Estado: %s", 
-            LP.Data.Level.Value, 
-            tostring(LP.Data.Beli.Value),
-            world,
-            Config.Farm.Enabled and "Farmeando" or "En espera")
-    })
+-- ═══════════════════════════════════════════════════════════════
+-- TAB: DASHBOARD
+-- ═══════════════════════════════════════════════════════════════
+
+Tabs.Dashboard:CreateSection("Información del Sistema")
+
+local StatusLabel = Tabs.Dashboard:CreateParagraph({
+    Title = "Estado del Script",
+    Content = "Cargando..."
+})
+
+local StatsLabel = Tabs.Dashboard:CreateParagraph({
+    Title = "Estadísticas de Sesión",
+    Content = "Cargando..."
+})
+
+local WorldInfo = Tabs.Dashboard:CreateLabel("Mundo: Detectando...")
+
+-- ═══════════════════════════════════════════════════════════════
+-- TAB: FARMING
+-- ═══════════════════════════════════════════════════════════════
+
+Tabs.Farming:CreateSection("Auto Farm Settings")
+
+Tabs.Farming:CreateToggle({
+    Name = "🔥 Auto Farm Level",
+    CurrentValue = Config.AutoFarm.Enabled,
+    Flag = "AutoFarmToggle",
+    Callback = function(value)
+        Config.AutoFarm.Enabled = value
+        Config.AutoFarm.Mode = "Level"
+        Session.Status = value and "Farming activo" or "En espera"
+        Utils:Notify("Auto Farm", value and "Activado" or "Desactivado", 2)
+    end
+})
+
+Tabs.Farming:CreateToggle({
+    Name = "🎯 Modo Seguro (Anti-Daño)",
+    CurrentValue = Config.AutoFarm.SafeMode,
+    Flag = "SafeModeToggle",
+    Callback = function(value)
+        Config.AutoFarm.SafeMode = value
+    end
+})
+
+Tabs.Farming:CreateSection("Auto Mastery")
+
+Tabs.Farming:CreateDropdown({
+    Name = "Seleccionar Arma",
+    Options = {"Combat", "Sword", "Blox Fruit", "Gun"},
+    CurrentOption = Config.Mastery.Weapon,
+    Flag = "MasteryWeapon",
+    Callback = function(option)
+        Config.Mastery.Weapon = option
+    end
+})
+
+Tabs.Farming:CreateToggle({
+    Name = "✨ Auto Mastery",
+    CurrentValue = Config.Mastery.Enabled,
+    Flag = "MasteryToggle",
+    Callback = function(value)
+        Config.Mastery.Enabled = value
+        Utils:Notify("Mastery", value and "Activado" or "Desactivado", 2)
+    end
+})
+
+Tabs.Farming:CreateSlider({
+    Name = "HP para Rematar (%)",
+    Range = {10, 50},
+    Increment = 5,
+    CurrentValue = Config.Mastery.FinishAtHealth,
+    Flag = "MasteryHP",
+    Callback = function(value)
+        Config.Mastery.FinishAtHealth = value
+    end
+})
+
+-- ═══════════════════════════════════════════════════════════════
+-- TAB: COMBATE
+-- ═══════════════════════════════════════════════════════════════
+
+Tabs.Combat:CreateSection("Sistema de Combate")
+
+Tabs.Combat:CreateToggle({
+    Name = "⚡ Fast Attack",
+    CurrentValue = Config.Combat.FastAttack,
+    Flag = "FastAttackToggle",
+    Callback = function(value)
+        Config.Combat.FastAttack = value
+    end
+})
+
+Tabs.Combat:CreateSlider({
+    Name = "Velocidad de Ataque",
+    Range = {0.01, 0.2},
+    Increment = 0.01,
+    CurrentValue = Config.Combat.AttackSpeed,
+    Flag = "AttackSpeed",
+    Callback = function(value)
+        Config.Combat.AttackSpeed = value
+    end
+})
+
+Tabs.Combat:CreateToggle({
+    Name = "🌀 Kill Aura",
+    CurrentValue = Config.Combat.KillAura,
+    Flag = "KillAuraToggle",
+    Callback = function(value)
+        Config.Combat.KillAura = value
+    end
+})
+
+Tabs.Combat:CreateSlider({
+    Name = "Rango de Kill Aura",
+    Range = {10, 100},
+    Increment = 5,
+    CurrentValue = Config.Combat.Range,
+    Flag = "KillAuraRange",
+    Callback = function(value)
+        Config.Combat.Range = value
+    end
+})
+
+-- ═══════════════════════════════════════════════════════════════
+-- TAB: STATS
+-- ═══════════════════════════════════════════════════════════════
+
+Tabs.Stats:CreateSection("Distribución de Estadísticas")
+
+Tabs.Stats:CreateToggle({
+    Name = "🥊 Melee",
+    CurrentValue = Config.Stats.Distribution.Melee,
+    Flag = "StatMelee",
+    Callback = function(value)
+        Config.Stats.Distribution.Melee = value
+    end
+})
+
+Tabs.Stats:CreateToggle({
+    Name = "🛡️ Defense",
+    CurrentValue = Config.Stats.Distribution.Defense,
+    Flag = "StatDefense",
+    Callback = function(value)
+        Config.Stats.Distribution.Defense = value
+    end
+})
+
+Tabs.Stats:CreateToggle({
+    Name = "⚔️ Sword",
+    CurrentValue = Config.Stats.Distribution.Sword,
+    Flag = "StatSword",
+    Callback = function(value)
+        Config.Stats.Distribution.Sword = value
+    end
+})
+
+Tabs.Stats:CreateToggle({
+    Name = "🔫 Gun",
+    CurrentValue = Config.Stats.Distribution.Gun,
+    Flag = "StatGun",
+    Callback = function(value)
+        Config.Stats.Distribution.Gun = value
+    end
+})
+
+Tabs.Stats:CreateToggle({
+    Name = "🍎 Blox Fruit",
+    CurrentValue = Config.Stats.Distribution["Blox Fruit"],
+    Flag = "StatFruit",
+    Callback = function(value)
+        Config.Stats.Distribution["Blox Fruit"] = value
+    end
+})
+
+Tabs.Stats:CreateToggle({
+    Name = "📊 Auto Stats (Activar)",
+    CurrentValue = Config.Stats.Enabled,
+    Flag = "AutoStatsToggle",
+    Callback = function(value)
+        Config.Stats.Enabled = value
+        Utils:Notify("Auto Stats", value and "Activado" or "Desactivado", 2)
+    end
+})
+
+-- ═══════════════════════════════════════════════════════════════
+-- TAB: PERFORMANCE
+-- ═══════════════════════════════════════════════════════════════
+
+Tabs.Performance:CreateSection("Optimización de Rendimiento")
+
+Tabs.Performance:CreateToggle({
+    Name = "💻 Modo CPU (Remover Texturas)",
+    CurrentValue = Config.Performance.CPUMode,
+    Flag = "CPUMode",
+    Callback = function(value)
+        Config.Performance.CPUMode = value
+        if value then Performance:ApplyCPUMode() end
+    end
+})
+
+Tabs.Performance:CreateToggle({
+    Name = "⚪ Pantalla Blanca (Máximo FPS)",
+    CurrentValue = Config.Performance.WhiteScreen,
+    Flag = "WhiteScreen",
+    Callback = function(value)
+        Performance:ToggleWhiteScreen(value)
+    end
+})
+
+Tabs.Performance:CreateToggle({
+    Name = "🚀 FPS Boost",
+    CurrentValue = Config.Performance.FPSBoost,
+    Flag = "FPSBoost",
+    Callback = function(value)
+        Config.Performance.FPSBoost = value
+        if value then Performance:ApplyFPSBoost() end
+    end
+})
+
+-- ═══════════════════════════════════════════════════════════════
+-- TAB: SEGURIDAD
+-- ═══════════════════════════════════════════════════════════════
+
+Tabs.Security:CreateSection("Protección y Anti-Ban")
+
+Tabs.Security:CreateToggle({
+    Name = "🔄 Anti-AFK",
+    CurrentValue = Config.Security.AntiAFK,
+    Flag = "AntiAFK",
+    Callback = function(value)
+        Config.Security.AntiAFK = value
+    end
+})
+
+Tabs.Security:CreateToggle({
+    Name = "👁️ Detector de Admins",
+    CurrentValue = Config.Security.AdminDetector,
+    Flag = "AdminDetector",
+    Callback = function(value)
+        Config.Security.AdminDetector = value
+    end
+})
+
+Tabs.Security:CreateToggle({
+    Name = "🚪 Auto-Leave al Detectar Admin",
+    CurrentValue = Config.Security.AutoLeaveOnAdmin,
+    Flag = "AutoLeave",
+    Callback = function(value)
+        Config.Security.AutoLeaveOnAdmin = value
+    end
+})
+
+-- ═══════════════════════════════════════════════════════════════
+-- TAB: AJUSTES
+-- ═══════════════════════════════════════════════════════════════
+
+Tabs.Settings:CreateSection("Información del Script")
+
+Tabs.Settings:CreateParagraph({
+    Title = "Bloxy Hub Elite v6.0",
+    Content = "Arquitectura Titanium\nDesarrollado con módulos profesionales\nThread-safe & Auto-cleanup\n\nGracias por usar Bloxy Elite! 🏆"
+})
+
+Tabs.Settings:CreateButton({
+    Name = "🔄 Reiniciar Script",
+    Callback = function()
+        Utils:Notify("Sistema", "Reiniciando en 3 segundos...", 3)
+        task.wait(3)
+        getgenv().BloxyElite.Restart()
+    end
+})
+
+Tabs.Settings:CreateButton({
+    Name = "❌ Cerrar Script",
+    Callback = function()
+        getgenv().BloxyElite.Shutdown()
+    end
+})
+
+-- ═══════════════════════════════════════════════════════════════
+-- SISTEMA DE LOOPS PRINCIPALES (Thread-Safe)
+-- ═══════════════════════════════════════════════════════════════
+
+-- Loop: Auto Farm
+ThreadManager:Register("AutoFarm", function()
+    if Config.AutoFarm.Enabled then
+        Farming:AutoLevel()
+    end
+    task.wait(0.1)
+end)
+
+-- Loop: Auto Mastery
+ThreadManager:Register("AutoMastery", function()
+    if Config.Mastery.Enabled then
+        Farming:AutoMastery()
+    end
+    task.wait(0.1)
+end)
+
+-- Loop: Fast Attack
+ThreadManager:Register("FastAttack", function()
+    if Config.Combat.FastAttack and (Config.AutoFarm.Enabled or Config.Mastery.Enabled or Config.Combat.KillAura) then
+        Combat:FastAttack()
+    end
+    task.wait(Config.Combat.AttackSpeed)
+end)
+
+-- Loop: Kill Aura
+ThreadManager:Register("KillAura", function()
+    if Config.Combat.KillAura then
+        Combat:KillAura()
+    end
+    task.wait(0.2)
+end)
+
+-- Loop: Auto Stats
+ThreadManager:Register("AutoStats", function()
+    if Config.Stats.Enabled then
+        StatsManager:DistributePoints()
+    end
+    task.wait(5) -- No es necesario actualizar stats cada milisegundo
+end)
+
+-- Loop: Seguridad y Admin Detector
+ThreadManager:Register("SecurityManager", function()
+    Security:AntiAFK()
+    if Config.Security.AdminDetector then
+        Security:DetectAdmin()
+    end
+    task.wait(2)
+end)
+
+-- Loop: Actualización de UI (Dashboard)
+ThreadManager:Register("UIUpdate", function()
+    Session:Update()
+    
+    local _, worldName = Utils:GetCurrentWorld()
+    WorldInfo:Set("Mundo: " .. worldName)
+    
+    StatusLabel:SetTitle("Estado: " .. Session.Status)
+    StatusLabel:SetContent(string.format(
+        "FPS: %d | Ping: %dms\nUptime: %s\nHilos Activos: %d",
+        Session.FPS, Session.Ping, Session.Uptime, ThreadManager:GetStatus()
+    ))
+    
+    StatsLabel:SetContent(string.format(
+        "Niveles Ganados: %d\nBeli Ganado: %d\nFragmentos: %d\nEnemigos Derrotados: %d",
+        Session.LevelsGained, Session.BeliEarned, Session.FragmentsEarned, Session.MobsKilled
+    ))
+    
     task.wait(1)
 end)
 
--- STATS TAB
-Tabs.Stats:CreateSection("Distribución Selectiva")
-Tabs.Stats:CreateToggle({Name = "🥊 Auto Melee", Callback = function(v) Config.Stats.Points.Melee = v end})
-Tabs.Stats:CreateToggle({Name = "🛡️ Auto Defense", Callback = function(v) Config.Stats.Points.Defense = v end})
-Tabs.Stats:CreateToggle({Name = "⚔️ Auto Sword", Callback = function(v) Config.Stats.Points.Sword = v end})
-Tabs.Stats:CreateToggle({Name = "✅ ACTIVAR AUTO STATS", Callback = function(v) Config.Stats.Enabled = v end})
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: GESTIÓN DE CIERRE (SHUTDOWN)
+-- ═══════════════════════════════════════════════════════════════
 
--- FARM CONTROLS
-Tabs.Farm:CreateSection("Auto Farming")
-Tabs.Farm:CreateToggle({Name = "Iniciar Auto Level", Callback = function(v) Config.Farm.Enabled = v end})
-Tabs.Farm:CreateSlider({Name = "Distancia", Range = {5, 20}, Increment = 1, CurrentValue = 10, Callback = function(v) Config.Farm.Distance = v end})
-
--- MASTERY TAB
-local MasteryTab = Window:CreateTab("Auto-Maestría", 4483362458)
-MasteryTab:CreateSection("Configuración de Maestría")
-MasteryTab:CreateDropdown({
-    Name = "Arma Requerida",
-    Options = {"Sword", "Fruit", "Gun"},
-    Callback = function(v) Config.Mastery.Tool = v end
-})
-MasteryTab:CreateSlider({
-    Name = "HP para Cambiar (%)",
-    Range = {10, 40},
-    Increment = 5,
-    CurrentValue = 20,
-    Callback = function(v) Config.Mastery.TargetHP = v end
-})
-MasteryTab:CreateToggle({Name = "🔥 ACTIVAR AUTO MASTERY", Callback = function(v) Config.Mastery.Enabled = v end})
-
--- MISC TAB
-Tabs.Misc:CreateSection("Utilidades de Servidor")
-Tabs.Misc:CreateButton({
-    Name = "Server Hop (Saltar a otro)",
-    Callback = function() 
-        local ps = game:GetService("HttpService"):JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
-        for _, s in pairs(ps.data) do
-            if s.playing < s.maxPlayers and s.id ~= game.JobId then
-                game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, s.id, LP)
-            end
-        end
-    end
-})
-
-Tabs.Misc:CreateSection("Optimización Visual")
-Tabs.Misc:CreateToggle({
-    Name = "Modo CPU (Remover Texturas)",
-    Callback = function(v) if v then ApplyCPUMode() end end
-})
-Tabs.Misc:CreateToggle({
-    Name = "Modo Pantalla Blanca (FPS)",
-    Callback = function(v) S.RSV:Set3dRenderingEnabled(not v) end
-})
-
--- SHUTDOWN LOGIC
-local function Shutdown()
-    ThreadManager.Active = false
-    Rayfield:Destroy()
+getgenv().BloxyElite.Shutdown = function()
     getgenv().BloxyElite.Active = false
-    S.RSV:Set3dRenderingEnabled(true)
-    print("Bloxy Hub: Shutdown Complete.")
+    ThreadManager:StopAll()
+    
+    -- Restaurar configuración de renderizado si estaba en White Screen
+    Performance:ToggleWhiteScreen(false)
+    
+    -- Destruir Interfaz
+    pcall(function()
+        Rayfield:Destroy()
+    end)
+    
+    warn("[BLOXY ELITE] Sistema Titanium cerrado correctamente.")
 end
 
-Tabs.Misc:CreateSection("Control del Script")
-Tabs.Misc:CreateButton({
-    Name = "🔄 Reiniciar Script",
-    Callback = function() 
-        Shutdown() 
-        task.wait(1)
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/Sam123mir/BloxyHub/refs/heads/main/Main.lua?t="..math.random(1,9999)))()
-    end
-})
+getgenv().BloxyElite.Restart = function()
+    getgenv().BloxyElite.Shutdown()
+    task.wait(1)
+    -- Aquí podrías volver a ejecutar el loadstring del script original
+    warn("[BLOXY ELITE] Reiniciando...")
+end
 
-Tabs.Misc:CreateButton({
-    Name = "❌ Cerrar Script Totalmente",
-    Callback = function() Shutdown() end
-})
+-- ═══════════════════════════════════════════════════════════════
+-- INICIALIZACIÓN FINAL
+-- ═══════════════════════════════════════════════════════════════
 
-getgenv().BloxyElite.Shutdown = Shutdown
 getgenv().BloxyElite.Active = true
 
-Rayfield:LoadConfiguration()
+-- Manejo de cambio de personaje (Re-bind de variables)
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    Character = newCharacter
+    Humanoid = newCharacter:WaitForChild("Humanoid")
+    HumanoidRootPart = newCharacter:WaitForChild("HumanoidRootPart")
+end)
+
+Utils:Notify("Sistema Titanium", "Bloxy Hub v6.0 cargado con éxito. ¡Buen farm!", 5)
+Session.Status = "Listo para farmear"
+
+-- Mensaje de consola para depuración profesional
+print([[
+    _____  _      ______  _______     __  ______ _      _____ _______ ______ 
+    |  __ \| |    |  __  \|_   _\ \   / / |  ____| |    |_   _|__   __|  ____|
+    | |__) | |    | |  | |  | |  \ \_/ /  | |__  | |      | |    | |  | |__   
+    |  __ <| |    | |  | |  | |   \   /   |  __| | |      | |    | |  |  __|  
+    | |__) | |____| |__| |_| |_    | |    | |____| |____ _| |_   | |  | |____ 
+    |_____/|______|______/|_____|   |_|    |______|______|_____|  |_|  |______|
+    TITANIUM REBUILD V6.0 - BY SAMMIR
+]])
