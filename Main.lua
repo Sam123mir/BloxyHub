@@ -175,12 +175,29 @@ local Config = {
         FPSBoost = false,
         TextureQuality = "High" -- High, Medium, Low, Potato
     },
-    
+
     Security = {
         AntiAFK = true,
         AdminDetector = false,
         AutoLeaveOnAdmin = true,
         StaffGroupId = 2440505
+    },
+    
+    -- PvP & AI Settings
+    PvP = {
+        Enabled = false,
+        AutoPvP = false,
+        MaxKills = 1,
+        TargetPlayer = nil,
+        KillCount = 0
+    },
+    
+    -- AI Mastery Settings
+    AIMastery = {
+        Enabled = false,
+        Mode = "IA", -- IA, Manual
+        SelectedWeapon = "Combat",
+        Skills = {Z = true, X = true, C = true, V = true}
     },
     
     -- Player Settings
@@ -222,6 +239,31 @@ local Session = {
     Status = "Inicializando..."
 }
 
+function Session:Update()
+    pcall(function()
+        local elapsed = os.time() - self.StartTime
+        local hours = math.floor(elapsed / 3600)
+        local mins = math.floor((elapsed % 3600) / 60)
+        local secs = elapsed % 60
+        
+        self.Uptime = string.format("%02d:%02d:%02d", hours, mins, secs)
+        
+        -- Verificación segura de datos (pueden ser nil al cargar)
+        if LocalPlayer:FindFirstChild("Data") then
+            if LocalPlayer.Data:FindFirstChild("Level") then self.LevelsGained = LocalPlayer.Data.Level.Value - self.StartLevel end
+            if LocalPlayer.Data:FindFirstChild("Beli") then self.BeliEarned = LocalPlayer.Data.Beli.Value - self.StartBeli end
+            if LocalPlayer.Data:FindFirstChild("Fragments") then self.FragmentsEarned = LocalPlayer.Data.Fragments.Value - self.StartFragments end
+        end
+        
+        -- Ping y FPS con manejo de errores
+        local pingItem = Services.Stats.Network.ServerStatsItem:FindFirstChild("Data Ping")
+        if pingItem then self.Ping = math.floor(pingItem:GetValue()) end
+        
+        local fpsItem = Services.Stats.FrameRateManager:FindFirstChild("RenderAverage")
+        if fpsItem then self.FPS = math.floor(fpsItem:GetValue()) end
+    end)
+end
+
 -- ═══════════════════════════════════════════════════════════════
 -- MÓDULO: SISTEMA DE LOGS (Depuración Pro)
 -- ═══════════════════════════════════════════════════════════════
@@ -250,10 +292,8 @@ end
 function LogSystem:RefreshUI()
     if self.UIElement then
         local content = table.concat(self.Entries, "\n")
-        self.UIElement:Set({
-            Title = "Registro de Actividad (Últimos 50)",
-            Content = content == "" and "No hay logs registrados." or content
-        })
+        self.UIElement:SetTitle("Registro de Actividad (Últimos 50)")
+        self.UIElement:SetContent(content == "" and "No hay logs registrados." or content)
     end
 end
 
@@ -334,6 +374,37 @@ function Utils:TeleportTo(cframe, safeMode)
     end
 end
 
+function Utils:Equip(toolName)
+    pcall(function()
+        if toolName == "Melee" then
+            for _, t in pairs(LocalPlayer.Backpack:GetChildren()) do
+                if t:IsA("Tool") and (t.ToolTip == "Melee" or t.Name == "Combat" or t:FindFirstChild("Combat")) then
+                    Humanoid:EquipTool(t)
+                    return
+                end
+            end
+            for _, t in pairs(Character:GetChildren()) do
+                if t:IsA("Tool") and (t.ToolTip == "Melee" or t.Name == "Combat" or t:FindFirstChild("Combat")) then
+                    return
+                end
+            end
+        else
+            local tool = LocalPlayer.Backpack:FindFirstChild(toolName) or Character:FindFirstChild(toolName)
+            if tool then
+                Humanoid:EquipTool(tool)
+            else
+                -- Búsqueda por tipo si no encuentra el nombre exacto
+                for _, t in pairs(LocalPlayer.Backpack:GetChildren()) do
+                    if t:IsA("Tool") and string.find(t.Name, toolName) then
+                        Humanoid:EquipTool(t)
+                        return
+                    end
+                end
+            end
+        end
+    end)
+end
+
 function Utils:GetCurrentWorld()
     local placeId = game.PlaceId
     if placeId == 2753915549 then return 1, "First Sea"
@@ -345,12 +416,86 @@ end
 function Utils:Notify(title, message, duration)
     if not Config.UI.Notifications then return end
     
-    Rayfield:Notify({
-        Title = title,
-        Content = message,
-        Duration = duration or 3,
-        Image = 4483362458
-    })
+    if Fluent then
+        Fluent:Notify({
+            Title = title,
+            Content = message,
+            Duration = duration or 3
+        })
+    end
+end
+
+-- // MÓDULO: INTELIGENCIA ARTIFICIAL (COMBATE PRO)
+local AI = {
+    IsUsingSkill = false,
+    CurrentSkillIndex = 1,
+    SkillKeys = {"z", "x", "c", "v"}
+}
+
+function AI:UseSkills(targetType)
+    if not Config.AIMastery.Enabled and not Config.PvP.AutoPvP then return end
+    if self.IsUsingSkill then return end
+    
+    task.spawn(function()
+        self.IsUsingSkill = true
+        
+        -- Rotación profesional de habilidades
+        for _, key in ipairs(self.SkillKeys) do
+            local upperKey = key:upper()
+            if Config.AIMastery.Skills[upperKey] then
+                Session.Status = "IA: Usando habilidad " .. upperKey
+                -- Usar habilidad de forma profesional
+                Services.VirtualUser:SetKeyDown(key)
+                task.wait(0.15)
+                Services.VirtualUser:SetKeyUp(key)
+                task.wait(0.1) -- Delay entre habilidades para no buguear
+            end
+        end
+        
+        Session.Status = "IA: Recargando habilidades..."
+        task.wait(0.5) -- Cool-down global de la IA
+        self.IsUsingSkill = false
+    end)
+end
+
+function AI:HandlePvP()
+    if not Config.PvP.AutoPvP then return end
+    
+    local targetName = Config.PvP.TargetPlayer
+    local target = targetName and Services.Players:FindFirstChild(targetName)
+    
+    if target and target.Character and target.Character:FindFirstChild("Humanoid") and target.Character.Humanoid.Health > 0 then
+        local targetHRP = target.Character.HumanoidRootPart
+        
+        -- Movimiento profesional (IA STRAFE)
+        -- Orbita alrededor del objetivo para evitar ataques
+        local time = tick()
+        local orbitDistance = 8
+        local orbitSpeed = 4
+        local offset = Vector3.new(math.cos(time * orbitSpeed) * orbitDistance, 5, math.sin(time * orbitSpeed) * orbitDistance)
+        
+        Utils:TeleportTo(CFrame.new(targetHRP.Position + offset, targetHRP.Position))
+        
+        -- Ataque y Habilidades
+        Session.Status = "PvP IA: Atacando a " .. target.Name
+        Combat:FastAttack()
+        self:UseSkills("PvP")
+        
+        -- Verificar si murió para el contador
+        if target.Character.Humanoid.Health <= 0 then
+            Config.PvP.KillCount = Config.PvP.KillCount + 1
+            Utils:Notify("PvP", "Objetivo eliminado (" .. Config.PvP.KillCount .. "/" .. Config.PvP.MaxKills .. ")", 3)
+            
+            if Config.PvP.KillCount >= Config.PvP.MaxKills then
+                Config.PvP.AutoPvP = false
+                Config.PvP.Enabled = false
+                Config.PvP.KillCount = 0
+                Utils:Notify("PvP", "Límite de bajas alcanzado. Modo PvP desactivado.", 5)
+            end
+        end
+    else
+        Session.Status = "Buscando objetivo PvP..."
+    end
 end
 
 -- ═══════════════════════════════════════════════════════════════
@@ -443,6 +588,7 @@ function Farming:AutoLevel()
     local enemy, distance = Utils:GetClosestEnemy(500)
     
     if enemy then
+        Utils:Equip("Melee") -- Equipar Melee por predeterminado
         Combat:AttackEnemy(enemy)
         
         if Config.Mastery.Enabled then
@@ -468,31 +614,43 @@ end
 
 local StatsManager = {}
 
-function StatsManager:DistributePoints()
-    if not Config.Stats.Enabled then return end
+function StatsManager:DistributePoints(manual)
+    if not Config.Stats.Enabled and not manual then return end
     
-    pcall(function()
-        local points = LocalPlayer.Data.StatsPoints.Value
-        if points <= 0 then return end
+    local success, err = pcall(function()
+        local data = LocalPlayer:FindFirstChild("Data")
+        if not data then return end
+        
+        local pointsVal = data:FindFirstChild("StatsPoints") or data:FindFirstChild("Points")
+        if not pointsVal or pointsVal.Value <= 0 then 
+            if manual then Utils:Notify("Stats", "No tienes puntos disponibles", 2) end
+            return 
+        end
         
         local activeStats = {}
         for stat, enabled in pairs(Config.Stats.Distribution) do
-            if enabled then
-                table.insert(activeStats, stat)
-            end
+            if enabled then table.insert(activeStats, stat) end
         end
         
-        if #activeStats == 0 then return end
+        if #activeStats == 0 then 
+            if manual then Utils:Notify("Stats", "Selecciona al menos una estadística", 2) end
+            return 
+        end
         
+        local points = pointsVal.Value
         local pointsPerStat = math.floor(points / #activeStats)
         
-        for _, stat in ipairs(activeStats) do
-            local success = Services.ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", stat, pointsPerStat)
-            if success then
-                Utils:Notify("Stats", string.format("+%d puntos en %s", pointsPerStat, stat), 2)
+        if pointsPerStat > 0 then
+            for _, stat in ipairs(activeStats) do
+                Services.ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", stat, pointsPerStat)
             end
+            Utils:Notify("Stats", "Puntos distribuidos correctamente", 2)
         end
     end)
+    
+    if not success then
+        warn("[STATS ERROR] " .. tostring(err))
+    end
 end
 
 -- ═══════════════════════════════════════════════════════════════
@@ -612,26 +770,21 @@ function PlayerExp:InfiniteSkyjump()
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- MÓDULO: UI RAYFIELD (Interfaz Profesional)
+-- MÓDULO: UI FLUENT (Interfaz Premium Titanium)
 -- ═══════════════════════════════════════════════════════════════
 
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
-local Window = Rayfield:CreateWindow({
-    Name = "Bloxy Hub ELITE 🏆 | v6.0 Titanium",
-    LoadingTitle = "Iniciando Sistema Titanium...",
-    LoadingSubtitle = "Cargando módulos profesionales",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "BloxyElite_V6",
-        FileName = "TitaniumConfig"
-    },
-    Discord = {
-        Enabled = false,
-        Invite = "noinvite",
-        RememberJoins = true
-    },
-    KeySystem = false
+local Window = Fluent:CreateWindow({
+    Title = "Bloxy Hub TITANIUM 💎 | v6.0",
+    SubTitle = "by Sammir",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true, -- El efecto de desenfoque (vidrio)
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.RightControl
 })
 
 -- ═══════════════════════════════════════════════════════════════
@@ -639,138 +792,161 @@ local Window = Rayfield:CreateWindow({
 -- ═══════════════════════════════════════════════════════════════
 
 local Tabs = {
-    Dashboard = Window:CreateTab("📊 Dashboard", 4483362458),
-    Farming = Window:CreateTab("⚔️ Farming", 4483362458),
-    Combat = Window:CreateTab("💥 Combate", 4483362458),
-    Player = Window:CreateTab("🏃 Personaje", 4483362458),
-    Stats = Window:CreateTab("📈 Stats", 4483362458),
-    Performance = Window:CreateTab("⚡ Performance", 4483362458),
-    Security = Window:CreateTab("🛡️ Seguridad", 4483362458),
-    Logs = Window:CreateTab("📋 Historial", 4483362458),
-    Settings = Window:CreateTab("⚙️ Ajustes", 4483362458)
+    Dashboard = Window:AddTab({ Title = "Dashboard", Icon = "layout" }),
+    Farming = Window:AddTab({ Title = "Farming", Icon = "sword" }),
+    Combat = Window:AddTab({ Title = "Combate", Icon = "zap" }),
+    Player = Window:AddTab({ Title = "Personaje", Icon = "user" }),
+    Stats = Window:AddTab({ Title = "Stats", Icon = "bar-chart" }),
+    Performance = Window:AddTab({ Title = "Rendimiento", Icon = "cpu" }),
+    Security = Window:AddTab({ Title = "Seguridad", Icon = "shield" }),
+    Logs = Window:AddTab({ Title = "Historial", Icon = "file-text" }),
+    Settings = Window:AddTab({ Title = "Ajustes", Icon = "settings" })
 }
 
 -- ═══════════════════════════════════════════════════════════════
 -- TAB: DASHBOARD
 -- ═══════════════════════════════════════════════════════════════
 
-Tabs.Dashboard:CreateSection("Información del Sistema")
+Tabs.Dashboard:AddParagraph({
+    Title = "💎 BIENVENIDO A TITANIUM ELITE",
+    Content = "El script de Blox Fruits más avanzado y con IA profesional."
+})
 
-local StatusLabel = Tabs.Dashboard:CreateParagraph({
+local StatusLabel = Tabs.Dashboard:AddParagraph({
     Title = "Estado del Script",
     Content = "Cargando..."
 })
 
-local StatsLabel = Tabs.Dashboard:CreateParagraph({
+local StatsLabel = Tabs.Dashboard:AddParagraph({
     Title = "Estadísticas de Sesión",
     Content = "Cargando..."
 })
 
-local WorldInfo = Tabs.Dashboard:CreateLabel("Mundo: Detectando...")
+local WorldInfo = Tabs.Dashboard:AddParagraph({
+    Title = "Mundo Actual",
+    Content = "Detectando..."
+})
 
 -- ═══════════════════════════════════════════════════════════════
 -- TAB: FARMING
 -- ═══════════════════════════════════════════════════════════════
 
-Tabs.Farming:CreateSection("Auto Farm Settings")
+local FarmingSection = Tabs.Farming:AddSection("🔥 Auto Farmear")
 
-Tabs.Farming:CreateToggle({
-    Name = "🔥 Auto Farm Level",
-    CurrentValue = Config.AutoFarm.Enabled,
-    Flag = "AutoFarmToggle",
+FarmingSection:AddToggle("AutoFarmToggle", {
+    Title = "Auto Farmear (Nivel)",
+    Default = Config.AutoFarm.Enabled,
     Callback = function(value)
         Config.AutoFarm.Enabled = value
         Config.AutoFarm.Mode = "Level"
-        Session.Status = value and "Farming activo" or "En espera"
-        Utils:Notify("Auto Farm", value and "Activado" or "Desactivado", 2)
     end
 })
 
-Tabs.Farming:CreateToggle({
-    Name = "🎯 Modo Seguro (Anti-Daño)",
-    CurrentValue = Config.AutoFarm.SafeMode,
-    Flag = "SafeModeToggle",
-    Callback = function(value)
-        Config.AutoFarm.SafeMode = value
-    end
-})
+local MasterySection = Tabs.Farming:AddSection("----- Maestría -----")
 
-Tabs.Farming:CreateSection("Auto Mastery")
-
-Tabs.Farming:CreateDropdown({
-    Name = "Seleccionar Arma",
-    Options = {"Combat", "Sword", "Blox Fruit", "Gun"},
-    CurrentOption = Config.Mastery.Weapon,
-    Flag = "MasteryWeapon",
-    Callback = function(option)
-        Config.Mastery.Weapon = option
-    end
-})
-
-Tabs.Farming:CreateToggle({
-    Name = "✨ Auto Mastery",
-    CurrentValue = Config.Mastery.Enabled,
-    Flag = "MasteryToggle",
+MasterySection:AddToggle("MasteryToggle", {
+    Title = "Auto Mastery",
+    Default = Config.Mastery.Enabled,
     Callback = function(value)
         Config.Mastery.Enabled = value
-        Utils:Notify("Mastery", value and "Activado" or "Desactivado", 2)
     end
 })
 
-Tabs.Farming:CreateSlider({
-    Name = "HP para Rematar (%)",
-    Range = {10, 50},
-    Increment = 5,
-    CurrentValue = Config.Mastery.FinishAtHealth,
-    Flag = "MasteryHP",
-    Callback = function(value)
-        Config.Mastery.FinishAtHealth = value
+local MasteryWeaponDropdown = MasterySection:AddDropdown("MasteryWeaponSelect", {
+    Title = "Seleccionar Arma",
+    Values = {"Melee", "Sword", "Blox Fruit", "Gun"},
+    Default = "Melee",
+    Callback = function(option)
+        Config.AIMastery.SelectedWeapon = option
     end
 })
+
+MasterySection:AddToggle("MasteryIA", {
+    Title = "Modo IA (Habilidades Inteligentes)",
+    Default = Config.AIMastery.Enabled,
+    Callback = function(value)
+        Config.AIMastery.Enabled = value
+    end
+})
+
+local SkillsSection = Tabs.Farming:AddSection("Selección de Habilidades")
+
+for _, key in ipairs({"Z", "X", "C", "V"}) do
+    SkillsSection:AddToggle("Skill"..key, {
+        Title = "Usar Habilidad " .. key,
+        Default = true,
+        Callback = function(v) Config.AIMastery.Skills[key] = v end
+    })
+end
 
 -- ═══════════════════════════════════════════════════════════════
 -- TAB: COMBATE
 -- ═══════════════════════════════════════════════════════════════
 
-Tabs.Combat:CreateSection("Sistema de Combate")
+local PvPSection = Tabs.Combat:AddSection("⚔️ Modo PvP Profesional")
 
-Tabs.Combat:CreateToggle({
-    Name = "⚡ Fast Attack",
-    CurrentValue = Config.Combat.FastAttack,
-    Flag = "FastAttackToggle",
+PvPSection:AddToggle("PvPEnabled", {
+    Title = "Activar Modo PvP",
+    Default = Config.PvP.Enabled,
     Callback = function(value)
-        Config.Combat.FastAttack = value
+        Config.PvP.Enabled = value
     end
 })
 
-Tabs.Combat:CreateSlider({
-    Name = "Velocidad de Ataque",
-    Range = {0.01, 0.2},
-    Increment = 0.01,
-    CurrentValue = Config.Combat.AttackSpeed,
-    Flag = "AttackSpeed",
+PvPSection:AddToggle("PvPAI", {
+    Title = "Auto PvP (IA Pro)",
+    Default = Config.PvP.AutoPvP,
     Callback = function(value)
-        Config.Combat.AttackSpeed = value
+        Config.PvP.AutoPvP = value
     end
 })
 
-Tabs.Combat:CreateToggle({
-    Name = "🌀 Kill Aura",
-    CurrentValue = Config.Combat.KillAura,
-    Flag = "KillAuraToggle",
-    Callback = function(value)
-        Config.Combat.KillAura = value
+PvPSection:AddSlider("MaxKillsSlider", {
+    Title = "Número de Objetivos a Eliminar",
+    Default = 1,
+    Min = 1,
+    Max = 10,
+    Rounding = 0,
+    Callback = function(v) Config.PvP.MaxKills = v end
+})
+
+local TeleportSection = Tabs.Combat:AddSection("📍 Teletransporte a Jugador")
+
+local PlayerList = {}
+local function UpdatePlayerList()
+    PlayerList = {}
+    for _, p in pairs(Services.Players:GetPlayers()) do
+        if p ~= LocalPlayer then table.insert(PlayerList, p.Name) end
+    end
+end
+UpdatePlayerList()
+
+local PlayerDropdown = TeleportSection:AddDropdown("PlayerTPSelect", {
+    Title = "Seleccionar Jugador",
+    Values = PlayerList,
+    Callback = function(pName)
+        Config.PvP.TargetPlayer = pName
     end
 })
 
-Tabs.Combat:CreateSlider({
-    Name = "Rango de Kill Aura",
-    Range = {10, 100},
-    Increment = 5,
-    CurrentValue = Config.Combat.Range,
-    Flag = "KillAuraRange",
-    Callback = function(value)
-        Config.Combat.Range = value
+TeleportSection:AddButton({
+    Title = "🚀 Teletransportarse al Jugador",
+    Callback = function()
+        if Config.PvP.TargetPlayer then
+            local target = Services.Players:FindFirstChild(Config.PvP.TargetPlayer)
+            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                Utils:TeleportTo(target.Character.HumanoidRootPart.CFrame)
+                Utils:Notify("Teleport", "Teletransportado a " .. target.Name, 2)
+            end
+        end
+    end
+})
+
+TeleportSection:AddButton({
+    Title = "🔄 Actualizar Lista de Jugadores",
+    Callback = function()
+        UpdatePlayerList()
+        PlayerDropdown:SetValues(PlayerList)
     end
 })
 
@@ -778,51 +954,47 @@ Tabs.Combat:CreateSlider({
 -- TAB: PERSONAJE
 -- ═══════════════════════════════════════════════════════════════
 
-Tabs.Player:CreateSection("Mejoras de Combate y Movilidad")
+local MobilitySection = Tabs.Player:AddSection("Mejoras de Combate y Movilidad")
 
-Tabs.Player:CreateToggle({
-    Name = "✨ Auto Aura (Haki)",
-    CurrentValue = Config.Player.AutoAura,
-    Flag = "AutoAura",
+MobilitySection:AddToggle("AutoAura", {
+    Title = "✨ Auto Aura (Haki)",
+    Default = Config.Player.AutoAura,
     Callback = function(value)
         Config.Player.AutoAura = value
         if value then PlayerExp:AutoAura() end
     end
 })
 
-Tabs.Player:CreateToggle({
-    Name = "🕊️ Salto Infinito (Skyjump)",
-    CurrentValue = Config.Player.InfiniteSkyjump,
-    Flag = "InfiniteSkyjump",
+MobilitySection:AddToggle("InfiniteSkyjump", {
+    Title = "🕊️ Salto Infinito (Skyjump)",
+    Default = Config.Player.InfiniteSkyjump,
     Callback = function(value)
         Config.Player.InfiniteSkyjump = value
         if value then PlayerExp:InfiniteSkyjump() end
     end
 })
 
-Tabs.Player:CreateSection("Velocidad y Salto")
+local SpeedSection = Tabs.Player:AddSection("Velocidad y Salto")
 
-Tabs.Player:CreateSlider({
-    Name = "Velocidad de Caminado",
-    Range = {16, 200},
-    Increment = 1,
-    CurrentValue = Config.Player.WalkSpeed,
-    Flag = "WalkSpeed",
+SpeedSection:AddSlider("WalkSpeed", {
+    Title = "Velocidad de Caminado",
+    Default = 16,
+    Min = 16,
+    Max = 200,
+    Rounding = 0,
     Callback = function(value)
         Config.Player.WalkSpeed = value
-        if Humanoid then Humanoid.WalkSpeed = value end
     end
 })
 
-Tabs.Player:CreateSlider({
-    Name = "Poder de Salto",
-    Range = {50, 300},
-    Increment = 1,
-    CurrentValue = Config.Player.JumpPower,
-    Flag = "JumpPower",
+SpeedSection:AddSlider("JumpPower", {
+    Title = "Poder de Salto",
+    Default = 50,
+    Min = 50,
+    Max = 300,
+    Rounding = 0,
     Callback = function(value)
         Config.Player.JumpPower = value
-        if Humanoid then Humanoid.JumpPower = value end
     end
 })
 
@@ -830,60 +1002,50 @@ Tabs.Player:CreateSlider({
 -- TAB: STATS
 -- ═══════════════════════════════════════════════════════════════
 
-Tabs.Stats:CreateSection("Distribución de Estadísticas")
+local StatsSection = Tabs.Stats:AddSection("Distribución de Estadísticas")
 
-Tabs.Stats:CreateToggle({
-    Name = "🥊 Melee",
-    CurrentValue = Config.Stats.Distribution.Melee,
-    Flag = "StatMelee",
-    Callback = function(value)
-        Config.Stats.Distribution.Melee = value
-    end
+StatsSection:AddToggle("StatMelee", {
+    Title = "🥊 Melee",
+    Default = Config.Stats.Distribution.Melee,
+    Callback = function(value) Config.Stats.Distribution.Melee = value end
 })
 
-Tabs.Stats:CreateToggle({
-    Name = "🛡️ Defense",
-    CurrentValue = Config.Stats.Distribution.Defense,
-    Flag = "StatDefense",
-    Callback = function(value)
-        Config.Stats.Distribution.Defense = value
-    end
+StatsSection:AddToggle("StatDefense", {
+    Title = "🛡️ Defense",
+    Default = Config.Stats.Distribution.Defense,
+    Callback = function(value) Config.Stats.Distribution.Defense = value end
 })
 
-Tabs.Stats:CreateToggle({
-    Name = "⚔️ Sword",
-    CurrentValue = Config.Stats.Distribution.Sword,
-    Flag = "StatSword",
-    Callback = function(value)
-        Config.Stats.Distribution.Sword = value
-    end
+StatsSection:AddToggle("StatSword", {
+    Title = "⚔️ Sword",
+    Default = Config.Stats.Distribution.Sword,
+    Callback = function(value) Config.Stats.Distribution.Sword = value end
 })
 
-Tabs.Stats:CreateToggle({
-    Name = "🔫 Gun",
-    CurrentValue = Config.Stats.Distribution.Gun,
-    Flag = "StatGun",
-    Callback = function(value)
-        Config.Stats.Distribution.Gun = value
-    end
+StatsSection:AddToggle("StatGun", {
+    Title = "🔫 Gun",
+    Default = Config.Stats.Distribution.Gun,
+    Callback = function(value) Config.Stats.Distribution.Gun = value end
 })
 
-Tabs.Stats:CreateToggle({
-    Name = "🍎 Blox Fruit",
-    CurrentValue = Config.Stats.Distribution["Blox Fruit"],
-    Flag = "StatFruit",
-    Callback = function(value)
-        Config.Stats.Distribution["Blox Fruit"] = value
-    end
+StatsSection:AddToggle("StatFruit", {
+    Title = "🍎 Blox Fruit",
+    Default = Config.Stats.Distribution["Blox Fruit"],
+    Callback = function(value) Config.Stats.Distribution["Blox Fruit"] = value end
 })
 
-Tabs.Stats:CreateToggle({
-    Name = "📊 Auto Stats (Activar)",
-    CurrentValue = Config.Stats.Enabled,
-    Flag = "AutoStatsToggle",
+StatsSection:AddToggle("AutoStatsToggle", {
+    Title = "📊 Auto Stats (Bucle)",
+    Default = Config.Stats.Enabled,
     Callback = function(value)
         Config.Stats.Enabled = value
-        Utils:Notify("Auto Stats", value and "Activado" or "Desactivado", 2)
+    end
+})
+
+StatsSection:AddButton({
+    Title = "⚡ Aplicar Puntos Ahora",
+    Callback = function()
+        StatsManager:DistributePoints(true)
     end
 })
 
@@ -891,31 +1053,28 @@ Tabs.Stats:CreateToggle({
 -- TAB: PERFORMANCE
 -- ═══════════════════════════════════════════════════════════════
 
-Tabs.Performance:CreateSection("Optimización de Rendimiento")
+local PerfSection = Tabs.Performance:AddSection("Optimización de Rendimiento")
 
-Tabs.Performance:CreateToggle({
-    Name = "💻 Modo CPU (Remover Texturas)",
-    CurrentValue = Config.Performance.CPUMode,
-    Flag = "CPUMode",
+PerfSection:AddToggle("CPUMode", {
+    Title = "💻 Modo CPU (Remover Texturas)",
+    Default = Config.Performance.CPUMode,
     Callback = function(value)
         Config.Performance.CPUMode = value
         if value then Performance:ApplyCPUMode() end
     end
 })
 
-Tabs.Performance:CreateToggle({
-    Name = "⚪ Pantalla Blanca (Máximo FPS)",
-    CurrentValue = Config.Performance.WhiteScreen,
-    Flag = "WhiteScreen",
+PerfSection:AddToggle("WhiteScreen", {
+    Title = "⚪ Pantalla Blanca (Máximo FPS)",
+    Default = Config.Performance.WhiteScreen,
     Callback = function(value)
         Performance:ToggleWhiteScreen(value)
     end
 })
 
-Tabs.Performance:CreateToggle({
-    Name = "🚀 FPS Boost",
-    CurrentValue = Config.Performance.FPSBoost,
-    Flag = "FPSBoost",
+PerfSection:AddToggle("FPSBoost", {
+    Title = "🚀 FPS Boost",
+    Default = Config.Performance.FPSBoost,
     Callback = function(value)
         Config.Performance.FPSBoost = value
         if value then Performance:ApplyFPSBoost() end
@@ -926,30 +1085,27 @@ Tabs.Performance:CreateToggle({
 -- TAB: SEGURIDAD
 -- ═══════════════════════════════════════════════════════════════
 
-Tabs.Security:CreateSection("Protección y Anti-Ban")
+local SecuritySection = Tabs.Security:AddSection("Protección y Anti-Ban")
 
-Tabs.Security:CreateToggle({
-    Name = "🔄 Anti-AFK",
-    CurrentValue = Config.Security.AntiAFK,
-    Flag = "AntiAFK",
+SecuritySection:AddToggle("AntiAFK", {
+    Title = "🔄 Anti-AFK",
+    Default = Config.Security.AntiAFK,
     Callback = function(value)
         Config.Security.AntiAFK = value
     end
 })
 
-Tabs.Security:CreateToggle({
-    Name = "👁️ Detector de Admins",
-    CurrentValue = Config.Security.AdminDetector,
-    Flag = "AdminDetector",
+SecuritySection:AddToggle("AdminDetector", {
+    Title = "👁️ Detector de Admins",
+    Default = Config.Security.AdminDetector,
     Callback = function(value)
         Config.Security.AdminDetector = value
     end
 })
 
-Tabs.Security:CreateToggle({
-    Name = "🚪 Auto-Leave al Detectar Admin",
-    CurrentValue = Config.Security.AutoLeaveOnAdmin,
-    Flag = "AutoLeave",
+SecuritySection:AddToggle("AutoLeave", {
+    Title = "🚪 Auto-Leave al Detectar Admin",
+    Default = Config.Security.AutoLeaveOnAdmin,
     Callback = function(value)
         Config.Security.AutoLeaveOnAdmin = value
     end
@@ -959,30 +1115,34 @@ Tabs.Security:CreateToggle({
 -- TAB: LOGS
 -- ═══════════════════════════════════════════════════════════════
 
-Tabs.Logs:CreateSection("Depuración del Sistema")
+local LogSection = Tabs.Logs:AddSection("Depuración del Sistema")
 
-LogSystem.UIElement = Tabs.Logs:CreateParagraph({
+LogSystem.UIElement = LogSection:AddParagraph({
     Title = "Registro de Actividad",
     Content = "Iniciandolo sistema de logs..."
 })
 
-Tabs.Logs:CreateButton({
-    Name = "🧹 Limpiar Historial",
+LogSection:AddButton({
+    Title = "🧹 Limpiar Historial",
     Callback = function()
         LogSystem:Clear()
     end
 })
 
-Tabs.Logs:CreateButton({
-    Name = "📋 Copiar Logs al Portapapeles",
+LogSection:AddButton({
+    Title = "📋 Copiar Logs al Portapapeles",
     Callback = function()
-        local allLogs = table.concat(LogSystem.Entries, "\n")
-        if setclipboard then
-            setclipboard(allLogs)
-            Utils:Notify("Logs", "Historial copiado al portapapeles", 2)
-        else
-            Utils:Notify("Logs", "Tu ejecutor no soporta setclipboard", 2)
-        end
+        pcall(function()
+            local allLogs = table.concat(LogSystem.Entries, "\n")
+            local copyFunc = setclipboard or toclipboard or set_clipboard or (Clipboard and Clipboard.set)
+            
+            if copyFunc then
+                copyFunc(allLogs)
+                Utils:Notify("Logs", "Historial copiado al portapapeles", 2)
+            else
+                Utils:Notify("Logs", "Tu ejecutor no soporta copiado", 2)
+            end
+        end)
     end
 })
 
@@ -990,15 +1150,15 @@ Tabs.Logs:CreateButton({
 -- TAB: AJUSTES
 -- ═══════════════════════════════════════════════════════════════
 
-Tabs.Settings:CreateSection("Información del Script")
+local ConfigSection = Tabs.Settings:AddSection("Información del Script")
 
-Tabs.Settings:CreateParagraph({
+ConfigSection:AddParagraph({
     Title = "Bloxy Hub Elite v6.0",
-    Content = "Arquitectura Titanium\nDesarrollado con módulos profesionales\nThread-safe & Auto-cleanup\n\nGracias por usar Bloxy Elite! 🏆"
+    Content = "Arquitectura Titanium\nDesarrollado con módulos profesionales\nThread-safe & Auto-cleanup"
 })
 
-Tabs.Settings:CreateButton({
-    Name = "🔄 Reiniciar Script",
+ConfigSection:AddButton({
+    Title = "🔄 Reiniciar Script",
     Callback = function()
         Utils:Notify("Sistema", "Reiniciando en 3 segundos...", 3)
         task.wait(3)
@@ -1006,12 +1166,25 @@ Tabs.Settings:CreateButton({
     end
 })
 
-Tabs.Settings:CreateButton({
-    Name = "❌ Cerrar Script",
+ConfigSection:AddButton({
+    Title = "❌ Cerrar Script",
     Callback = function()
         getgenv().BloxyElite.Shutdown()
     end
 })
+
+-- Inicialización de Guardado
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("BloxyElite_V6")
+SaveManager:SetFolder("BloxyElite_V6/Titanium")
+
+SaveManager:BuildConfigSection(Tabs.Settings)
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+
+Window:SelectTab(1)
 
 -- ═══════════════════════════════════════════════════════════════
 -- SISTEMA DE LOOPS PRINCIPALES (Thread-Safe)
@@ -1028,7 +1201,24 @@ end)
 -- Loop: Auto Mastery
 ThreadManager:Register("AutoMastery", function()
     if Config.Mastery.Enabled then
-        Farming:AutoMastery()
+        if Config.AIMastery.Enabled then
+            local enemy = Utils:GetClosestEnemy(500)
+            if enemy then
+                Utils:Equip(Config.AIMastery.SelectedWeapon)
+                Combat:AttackEnemy(enemy)
+                AI:UseSkills("Mastery")
+            end
+        else
+            Farming:AutoMastery() 
+        end
+    end
+    task.wait(0.1)
+end)
+
+-- Loop: PvP IA
+ThreadManager:Register("PvPIA", function()
+    if Config.PvP.AutoPvP then
+        AI:HandlePvP()
     end
     task.wait(0.1)
 end)
@@ -1076,22 +1266,31 @@ end)
 
 -- Loop: Actualización de UI (Dashboard)
 ThreadManager:Register("UIUpdate", function()
-    Session:Update()
-    
-    local _, worldName = Utils:GetCurrentWorld()
-    WorldInfo:Set("Mundo: " .. worldName)
-    
-    StatusLabel:SetTitle("Estado: " .. Session.Status)
-    StatusLabel:SetContent(string.format(
-        "FPS: %d | Ping: %dms\nUptime: %s\nHilos Activos: %d",
-        Session.FPS, Session.Ping, Session.Uptime, ThreadManager:GetStatus()
-    ))
-    
-    StatsLabel:SetContent(string.format(
-        "Niveles Ganados: %d\nBeli Ganado: %d\nFragmentos: %d\nEnemigos Derrotados: %d",
-        Session.LevelsGained, Session.BeliEarned, Session.FragmentsEarned, Session.MobsKilled
-    ))
-    
+    pcall(function()
+        Session:Update()
+        
+        local _, worldName = Utils:GetCurrentWorld()
+        if WorldInfo then 
+            WorldInfo:SetTitle("Mundo Actual")
+            WorldInfo:SetContent(worldName) 
+        end
+        
+        if StatusLabel then
+            StatusLabel:SetTitle("Estado: " .. Session.Status)
+            StatusLabel:SetContent(string.format(
+                "FPS: %d | Ping: %dms\nUptime: %s\nHilos Activos: %d",
+                Session.FPS, Session.Ping, Session.Uptime, ThreadManager:GetStatus()
+            ))
+        end
+        
+        if StatsLabel then
+            StatsLabel:SetTitle("Estadísticas de Sesión")
+            StatsLabel:SetContent(string.format(
+                "Niveles Ganados: %d\nBeli Ganado: %d\nFragmentos: %d\nEnemigos Derrotados: %d",
+                Session.LevelsGained, Session.BeliEarned, Session.FragmentsEarned, Session.MobsKilled
+            ))
+        end
+    end)
     task.wait(1)
 end)
 
@@ -1108,7 +1307,9 @@ getgenv().BloxyElite.Shutdown = function()
     
     -- Destruir Interfaz
     pcall(function()
-        Rayfield:Destroy()
+        if Fluent then
+            Fluent:Destroy()
+        end
     end)
     
     warn("[BLOXY ELITE] Sistema Titanium cerrado correctamente.")
