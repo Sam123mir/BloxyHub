@@ -1,8 +1,7 @@
 --[[
     ╔══════════════════════════════════════════════════════════════╗
-    ║  BLOXY HUB ELITE V6.0 - TITANIUM REBUILD                    ║
-    ║  Arquitectura Modular Profesional | Thread-Safe | Auto-Clean║
-    ║  Desarrollado por Sammir | Optimizado para Blox Fruits      ║
+    ║  BLOX FRUITS PANEL | BLOXY HUB TITANIUM V7.0               ║
+    ║  Arquitectura Modular Profesional | Diseñado por Sammir    ║
     ╚══════════════════════════════════════════════════════════════╝
 --]]
 
@@ -17,7 +16,9 @@ local GITHUB_RAW = "https://raw.githubusercontent.com/Sam123mir/BloxyHub/refs/he
 
 if getgenv().BloxyHub.Active then
     warn("[BLOXY HUB] Ya hay una instancia activa. Cerrando instancia anterior...")
-    getgenv().BloxyHub.Shutdown()
+    if getgenv().BloxyHub.Shutdown then
+        pcall(getgenv().BloxyHub.Shutdown)
+    end
     task.wait(1)
 end
 
@@ -618,15 +619,21 @@ local QuestData = {
         {NPC = "Pirate Quest Giver", Quest = "BruteQuest1", Enemy = "Brute", Level = 45, CFrame = CFrame.new(-1140, 4, 3828)},
         {NPC = "Desert Quest Giver", Quest = "DesertQuest1", Enemy = "Desert Bandit", Level = 60, CFrame = CFrame.new(894, 6, 4390)},
         {NPC = "Desert Quest Giver", Quest = "DesertQuest2", Enemy = "Desert Officer", Level = 75, CFrame = CFrame.new(894, 6, 4390)},
+        {NPC = "Snow Quest Giver", Quest = "SnowQuest1", Enemy = "Snow Bandit", Level = 90, CFrame = CFrame.new(1389, 7, -1297)},
+        {NPC = "Snow Quest Giver", Quest = "SnowQuest2", Enemy = "Snowman", Level = 100, CFrame = CFrame.new(1389, 7, -1297)},
+        {NPC = "Chef Shipwright Quest Giver", Quest = "ShipwrightQuest1", Enemy = "Shipwright Cook", Level = 120, CFrame = CFrame.new(-1154, 7, -2708)},
     },
     [2] = { -- Second Sea
         {NPC = "Quest Giver", Quest = "RaiderQuest1", Enemy = "Raider", Level = 700, CFrame = CFrame.new(-426, 73, 1836)},
         {NPC = "Quest Giver", Quest = "RaiderQuest2", Enemy = "Mercenary", Level = 725, CFrame = CFrame.new(-426, 73, 1836)},
         {NPC = "Quest Giver", Quest = "SwanQuest1", Enemy = "Swan Pirate", Level = 775, CFrame = CFrame.new(-628, 15, 1572)},
+        {NPC = "Quest Giver", Quest = "SwanQuest2", Enemy = "Factory Worker", Level = 800, CFrame = CFrame.new(-628, 15, 1572)},
+        {NPC = "Quest Giver", Quest = "MagmaQuest1", Enemy = "Military Soldier", Level = 1100, CFrame = CFrame.new(-5437, 56, -4296)},
     },
     [3] = { -- Third Sea
         {NPC = "Quest Giver", Quest = "MarineQuest1", Enemy = "Marine Cadet", Level = 1500, CFrame = CFrame.new(-9506, 164, 5786)},
         {NPC = "Quest Giver", Quest = "MarineQuest2", Enemy = "Marine Captain", Level = 1525, CFrame = CFrame.new(-9506, 164, 5786)},
+        {NPC = "Quest Giver", Quest = "SnakeQuest1", Enemy = "Dragon Crew Warrior", Level = 1600, CFrame = CFrame.new(-10524, 75, -7860)},
     }
 }
 
@@ -866,13 +873,25 @@ end
 -- MÓDULO: UI FLUENT (Interfaz Premium Titanium)
 -- ═══════════════════════════════════════════════════════════════
 
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local Fluent = nil
+local s, e = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/main.lua"))()
+end)
+
+if s and e then
+    Fluent = e
+    getgenv().Fluent = Fluent
+else
+    warn("[BLOXY HUB] Error cargando Fluent: " .. tostring(e))
+    return
+end
+
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 local Window = Fluent:CreateWindow({
-    Title = "Bloxy Hub TITANIUM 💎 | v6.0",
-    SubTitle = "by Sammir",
+    Title = "Blox Fruits Panel 🏴‍☠️ | Bloxy Hub Titanium",
+    SubTitle = "v7.0 by Sammir",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
     Acrylic = true, -- El efecto de desenfoque (vidrio)
@@ -1268,8 +1287,8 @@ LogSection:AddButton({
 local ConfigSection = Tabs.Settings:AddSection("Información del Script")
 
 ConfigSection:AddParagraph({
-    Title = "Bloxy Hub v6.0",
-    Content = "Arquitectura Titanium\nDesarrollado con módulos profesionales\nThread-safe & Auto-cleanup"
+    Title = "Blox Fruits Panel",
+    Content = "Marca: BLOXY HUB\nCategoría: Premium Titanium\nDesarrollado por Sammir"
 })
 
 ConfigSection:AddButton({
@@ -1293,8 +1312,8 @@ SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({})
-InterfaceManager:SetFolder("BloxyHub_V6")
-SaveManager:SetFolder("BloxyHub_V6/Titanium")
+InterfaceManager:SetFolder("BloxyHub/BloxFruits")
+SaveManager:SetFolder("BloxyHub/BloxFruits/Titanium")
 
 SaveManager:BuildConfigSection(Tabs.Settings)
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
@@ -1486,7 +1505,7 @@ task.spawn(function()
         currentVersion = currentVersion:gsub("%s+", "") -- Limpiar espacios
         if currentVersion ~= VERSION then
             Utils:Notify("Actualización", "¡Hay una nueva versión disponible (" .. currentVersion .. ")!", 10)
-            warn("[BLOXY ELITE] NUEVA VERSIÓN DETECTADA: " .. currentVersion)
+            warn("[BLOXY HUB] NUEVA VERSIÓN DETECTADA: " .. currentVersion)
         end
     end
 end)
@@ -1498,7 +1517,7 @@ LocalPlayer.CharacterAdded:Connect(function(newCharacter)
     HumanoidRootPart = newCharacter:WaitForChild("HumanoidRootPart")
 end)
 
-Utils:Notify("Sistema Titanium", "Bloxy Hub v6.0 cargado con éxito. ¡Buen farm!", 5)
+Utils:Notify("Bloxy Hub", "Blox Fruits Panel cargado con éxito. ¡Buen farm!", 5)
 Session.Status = "Listo para farmear"
 
 -- Mensaje de consola para depuración profesional
@@ -1508,5 +1527,5 @@ print([[
     |  _ \| |   | |  | | \  /   \ V /   | |__| | |  | |  _ \ 
     | |_) | |___| |__| | /  \    | |    |  __  | |  | | |_) |
     |____/|_____|\____/ /_/\_\   |_|    |_|  |_|\____/|____/ 
-    BLOXY HUB TITANIUM V6.0 - BY SAMMIR
+    BLOX FRUITS PANEL - BLOXY HUB TITANIUM V7.0
 ]])
