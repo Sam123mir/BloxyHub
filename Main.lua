@@ -37,7 +37,9 @@ function ThreadManager:Register(name, func)
             while self.Active and self.Threads[name] do
                 local s, e = pcall(func)
                 if not s then
-                    warn(string.format("[THREAD ERROR: %s] %s", name, tostring(e)))
+                    local errorMsg = string.format("[THREAD ERROR: %s] %s", name, tostring(e))
+                    warn(errorMsg)
+                    if LogSystem then LogSystem:Add(tostring(e), "FATAL:"..name) end
                 end
                 task.wait()
             end
@@ -192,6 +194,55 @@ local Session = {
     FPS = 60,
     Status = "Inicializando..."
 }
+
+-- ═══════════════════════════════════════════════════════════════
+-- MÓDULO: SISTEMA DE LOGS (Depuración Pro)
+-- ═══════════════════════════════════════════════════════════════
+
+local LogSystem = {
+    Entries = {},
+    MaxEntries = 50,
+    UIElement = nil
+}
+
+function LogSystem:Add(msg, logType)
+    logType = logType or "INFO"
+    local timestamp = os.date("%H:%M:%S")
+    local entry = string.format("[%s] [%s] %s", timestamp, logType, msg)
+    
+    table.insert(self.Entries, 1, entry)
+    if #self.Entries > self.MaxEntries then
+        table.remove(self.Entries)
+    end
+    
+    if self.UIElement then
+        self:RefreshUI()
+    end
+end
+
+function LogSystem:RefreshUI()
+    if self.UIElement then
+        local content = table.concat(self.Entries, "\n")
+        self.UIElement:Set({
+            Title = "Registro de Actividad (Últimos 50)",
+            Content = content == "" and "No hay logs registrados." or content
+        })
+    end
+end
+
+function LogSystem:Clear()
+    self.Entries = {}
+    self:RefreshUI()
+end
+
+-- Captura automática de errores del script
+game:GetService("LogService").MessageOut:Connect(function(msg, messageType)
+    if messageType == Enum.MessageType.MessageError then
+        if string.find(msg, "Bloxy") or string.find(msg, "Titanium") then
+            LogSystem:Add(msg, "ERROR")
+        end
+    end
+end)
 
 function Session:Update()
     local elapsed = os.time() - self.StartTime
@@ -535,6 +586,7 @@ local Tabs = {
     Stats = Window:CreateTab("📈 Stats", 4483362458),
     Performance = Window:CreateTab("⚡ Performance", 4483362458),
     Security = Window:CreateTab("🛡️ Seguridad", 4483362458),
+    Logs = Window:CreateTab("📋 Historial", 4483362458),
     Settings = Window:CreateTab("⚙️ Ajustes", 4483362458)
 }
 
@@ -788,6 +840,36 @@ Tabs.Security:CreateToggle({
     Flag = "AutoLeave",
     Callback = function(value)
         Config.Security.AutoLeaveOnAdmin = value
+})
+
+-- ═══════════════════════════════════════════════════════════════
+-- TAB: LOGS
+-- ═══════════════════════════════════════════════════════════════
+
+Tabs.Logs:CreateSection("Depuración del Sistema")
+
+LogSystem.UIElement = Tabs.Logs:CreateParagraph({
+    Title = "Registro de Actividad",
+    Content = "Iniciandolo sistema de logs..."
+})
+
+Tabs.Logs:CreateButton({
+    Name = "🧹 Limpiar Historial",
+    Callback = function()
+        LogSystem:Clear()
+    end
+})
+
+Tabs.Logs:CreateButton({
+    Name = "📋 Copiar Logs al Portapapeles",
+    Callback = function()
+        local allLogs = table.concat(LogSystem.Entries, "\n")
+        if setclipboard then
+            setclipboard(allLogs)
+            Utils:Notify("Logs", "Historial copiado al portapapeles", 2)
+        else
+            Utils:Notify("Logs", "Tu ejecutor no soporta setclipboard", 2)
+        end
     end
 })
 
