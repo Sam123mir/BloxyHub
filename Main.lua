@@ -10,13 +10,14 @@
 -- SISTEMA DE VERSIÓN Y VALIDACIÓN
 -- ═══════════════════════════════════════════════════════════════
 
-getgenv().BloxyElite = getgenv().BloxyElite or {}
+getgenv().BloxyHub = getgenv().BloxyHub or {}
 local VERSION = "6.0.0"
-local GITHUB_RAW = "https://raw.githubusercontent.com/yourrepo/bloxyelite/main/version.txt"
+-- Reemplaza este link con tu link RAW de GitHub (donde esté tu versión escrita)
+local GITHUB_RAW = "https://raw.githubusercontent.com/Sam123mir/BloxyHub/refs/heads/main/version.txt"
 
-if getgenv().BloxyElite.Active then
-    warn("[BLOXY ELITE] Ya hay una instancia activa. Cerrando instancia anterior...")
-    getgenv().BloxyElite.Shutdown()
+if getgenv().BloxyHub.Active then
+    warn("[BLOXY HUB] Ya hay una instancia activa. Cerrando instancia anterior...")
+    getgenv().BloxyHub.Shutdown()
     task.wait(1)
 end
 
@@ -1153,7 +1154,7 @@ LogSection:AddButton({
 local ConfigSection = Tabs.Settings:AddSection("Información del Script")
 
 ConfigSection:AddParagraph({
-    Title = "Bloxy Hub Elite v6.0",
+    Title = "Bloxy Hub v6.0",
     Content = "Arquitectura Titanium\nDesarrollado con módulos profesionales\nThread-safe & Auto-cleanup"
 })
 
@@ -1178,8 +1179,8 @@ SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({})
-InterfaceManager:SetFolder("BloxyElite_V6")
-SaveManager:SetFolder("BloxyElite_V6/Titanium")
+InterfaceManager:SetFolder("BloxyHub_V6")
+SaveManager:SetFolder("BloxyHub_V6/Titanium")
 
 SaveManager:BuildConfigSection(Tabs.Settings)
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
@@ -1298,8 +1299,8 @@ end)
 -- MÓDULO: GESTIÓN DE CIERRE (SHUTDOWN)
 -- ═══════════════════════════════════════════════════════════════
 
-getgenv().BloxyElite.Shutdown = function()
-    getgenv().BloxyElite.Active = false
+getgenv().BloxyHub.Shutdown = function()
+    getgenv().BloxyHub.Active = false
     ThreadManager:StopAll()
     
     -- Restaurar configuración de renderizado si estaba en White Screen
@@ -1312,21 +1313,36 @@ getgenv().BloxyElite.Shutdown = function()
         end
     end)
     
-    warn("[BLOXY ELITE] Sistema Titanium cerrado correctamente.")
+    warn("[BLOXY HUB] Sistema Titanium cerrado correctamente.")
 end
 
-getgenv().BloxyElite.Restart = function()
-    getgenv().BloxyElite.Shutdown()
+getgenv().BloxyHub.Restart = function()
+    getgenv().BloxyHub.Shutdown()
     task.wait(1)
     -- Aquí podrías volver a ejecutar el loadstring del script original
-    warn("[BLOXY ELITE] Reiniciando...")
+    warn("[BLOXY HUB] Reiniciando...")
 end
 
 -- ═══════════════════════════════════════════════════════════════
 -- INICIALIZACIÓN FINAL
 -- ═══════════════════════════════════════════════════════════════
 
-getgenv().BloxyElite.Active = true
+getgenv().BloxyHub.Active = true
+
+-- Función de Verificación de Versión
+task.spawn(function()
+    local success, currentVersion = pcall(function()
+        return game:HttpGet(GITHUB_RAW .. "?t=" .. tick())
+    end)
+    
+    if success then
+        currentVersion = currentVersion:gsub("%s+", "") -- Limpiar espacios
+        if currentVersion ~= VERSION then
+            Utils:Notify("Actualización", "¡Hay una nueva versión disponible (" .. currentVersion .. ")!", 10)
+            warn("[BLOXY ELITE] NUEVA VERSIÓN DETECTADA: " .. currentVersion)
+        end
+    end
+end)
 
 -- Manejo de cambio de personaje (Re-bind de variables)
 LocalPlayer.CharacterAdded:Connect(function(newCharacter)
@@ -1345,5 +1361,5 @@ print([[
     |  _ \| |   | |  | | \  /   \ V /   | |__| | |  | |  _ \ 
     | |_) | |___| |__| | /  \    | |    |  __  | |  | | |_) |
     |____/|_____|\____/ /_/\_\   |_|    |_|  |_|\____/|____/ 
-    TITANIUM REBUILD V6.0 - BY SAMMIR
+    BLOXY HUB TITANIUM V6.0 - BY SAMMIR
 ]])
