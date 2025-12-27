@@ -1,6 +1,6 @@
 --[[
     ╔══════════════════════════════════════════════════════════════╗
-    ║  BLOX FRUITS PANEL | BLOXY HUB TITANIUM V7.1               ║
+    ║  BLOX FRUITS PANEL | BLOXY HUB TITANIUM V7.0               ║
     ║  Arquitectura Modular Profesional | Diseñado por Sammir    ║
     ╚══════════════════════════════════════════════════════════════╝
 --]]
@@ -20,6 +20,7 @@ local GITHUB_RAW = "https://raw.githubusercontent.com/Sam123mir/BloxyHub/refs/he
 
 print("[BLOXY HUB] Iniciando sistema...")
 
+local LoadingLabel
 local function CreateLoadingVisual()
     local player = game:GetService("Players").LocalPlayer
     local gui = player:FindFirstChild("PlayerGui"):FindFirstChild("BloxyLoading")
@@ -31,14 +32,14 @@ local function CreateLoadingVisual()
     gui.Parent = player:WaitForChild("PlayerGui")
     
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 250, 0, 80)
-    frame.Position = UDim2.new(0.5, -125, 0, 50)
+    frame.Size = UDim2.new(0, 280, 0, 100)
+    frame.Position = UDim2.new(0.5, -140, 0.4, -50)
     frame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
     frame.BorderSizePixel = 0
     frame.Parent = gui
     
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
+    corner.CornerRadius = UDim.new(0, 15)
     corner.Parent = frame
     
     local stroke = Instance.new("UIStroke")
@@ -46,19 +47,26 @@ local function CreateLoadingVisual()
     stroke.Thickness = 2
     stroke.Parent = frame
     
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Text = "BLOXY HUB\nCargando Panel..."
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.TextSize = 18
-    label.Font = Enum.Font.GothamBold
-    label.Parent = frame
+    LoadingLabel = Instance.new("TextLabel")
+    LoadingLabel.Size = UDim2.new(1, 0, 1, 0)
+    LoadingLabel.BackgroundTransparency = 1
+    LoadingLabel.Text = "BLOXY HUB\nIniciando..."
+    LoadingLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LoadingLabel.TextSize = 20
+    LoadingLabel.Font = Enum.Font.GothamBold
+    LoadingLabel.Parent = frame
     
     return gui
 end
 
-local LoadingGui = pcall(CreateLoadingVisual)
+pcall(CreateLoadingVisual)
+
+local function UpdateLoading(text)
+    if LoadingLabel then
+        LoadingLabel.Text = "BLOXY HUB\n" .. text
+        print("[BLOXY HUB] " .. text)
+    end
+end
 
 if getgenv().BloxyHub.Active then
     warn("[BLOXY HUB] Ya hay una instancia activa. Cerrando instancia anterior...")
@@ -906,6 +914,7 @@ end
 -- MÓDULO: UI FLUENT (Interfaz Premium Titanium)
 -- ═══════════════════════════════════════════════════════════════
 
+UpdateLoading("Descargando Interfaz...")
 local Fluent = nil
 local s, e = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/main.lua"))()
@@ -914,8 +923,8 @@ end)
 if s and e then
     Fluent = e
     getgenv().Fluent = Fluent
-    print("[BLOXY HUB] Librería Fluent cargada exitosamente.")
 else
+    UpdateLoading("Error al cargar interfaz")
     warn("[BLOXY HUB] Error cargando Fluent: " .. tostring(e))
     -- Si falla, intentamos link alternativo
     local s2, e2 = pcall(function()
@@ -925,16 +934,20 @@ else
         Fluent = e2
         getgenv().Fluent = Fluent
     else
+        task.wait(2)
+        pcall(function() LocalPlayer.PlayerGui.BloxyLoading:Destroy() end)
         return
     end
 end
 
+UpdateLoading("Cargando Guardado...")
 local SaveManager, InterfaceManager
 pcall(function()
-    print("[BLOXY HUB] Descargando complementos de interfaz...")
     SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
     InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 end)
+
+UpdateLoading("Construyendo Ventana...")
 
 local Window = Fluent:CreateWindow({
     Title = "Blox Fruits Panel 🏴‍☠️ | Bloxy Hub",
@@ -1535,7 +1548,37 @@ local function CreateFloatingButton()
         end
     end)
     
-    -- Eliminar Loading Screen visual
+    -- Lógica de Arrastre Manual Profesional
+    local dragging, dragInput, dragStart, startPos
+    
+    Button.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = Button.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    Button.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    Services.UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            Button.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    -- Eliminar Loading Screen visual inmediatamente al estar listo
     pcall(function()
         if LocalPlayer.PlayerGui:FindFirstChild("BloxyLoading") then
             LocalPlayer.PlayerGui.BloxyLoading:Destroy()
