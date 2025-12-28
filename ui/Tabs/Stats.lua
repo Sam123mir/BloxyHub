@@ -1,144 +1,113 @@
 --[[
-    BLOXY HUB TITANIUM - UI: TAB STATS
-    Distribución de estadísticas - CORREGIDO + RESET
+    BLOXY HUB TITANIUM - TAB: STATS
+    Distribución de estadísticas
 ]]
 
-local StatsTab = {}
+local Stats = {}
 
-function StatsTab:Create(Window, deps)
-    local Utils = deps.Utils
-    local Config = deps.Config
-    local StatsManager = deps.StatsManager
-    local Colors = deps.Colors
+function Stats:Create(Window, deps)
+    local Core = deps.Core
     
-    local Tab = Window:Tab({
-        Title = Utils:Translate("Stats"),
-        Icon = "solar:chart-bold",
-        IconColor = Colors.Green,
-        IconShape = "Square",
-        Border = true
+    local Tab = Window:Tab({ Title = "Stats", Icon = "plus-circle" })
+    
+    local StatToggles = {
+        Melee = false,
+        Defense = false,
+        Sword = false,
+        Gun = false,
+        ["Blox Fruit"] = false
+    }
+    
+    Tab:Section({ Title = "📈 Auto Stats Distribution" })
+    
+    Tab:Toggle({
+        Title = "Melee",
+        Default = false,
+        Callback = function(v) StatToggles.Melee = v end
     })
     
-    -- Sección Distribución
-    local DistSection = Tab:Section({
-        Title = Utils:Translate("StatDistribution"),
-        Box = true,
-        BoxBorder = true,
-        Opened = true
+    Tab:Toggle({
+        Title = "Defense",
+        Default = false,
+        Callback = function(v) StatToggles.Defense = v end
     })
     
-    DistSection:Toggle({
-        Title = "🥊 Melee",
-        Default = Config.Stats.Distribution.Melee,
-        Flag = "StatMelee",
-        Callback = function(value)
-            Config.Stats.Distribution.Melee = value
-        end
+    Tab:Toggle({
+        Title = "Sword",
+        Default = false,
+        Callback = function(v) StatToggles.Sword = v end
     })
     
-    DistSection:Space()
-    
-    DistSection:Toggle({
-        Title = "🛡️ Defense",
-        Default = Config.Stats.Distribution.Defense,
-        Flag = "StatDefense",
-        Callback = function(value)
-            Config.Stats.Distribution.Defense = value
-        end
+    Tab:Toggle({
+        Title = "Gun",
+        Default = false,
+        Callback = function(v) StatToggles.Gun = v end
     })
     
-    DistSection:Space()
-    
-    DistSection:Toggle({
-        Title = "⚔️ Sword",
-        Default = Config.Stats.Distribution.Sword,
-        Flag = "StatSword",
-        Callback = function(value)
-            Config.Stats.Distribution.Sword = value
-        end
+    Tab:Toggle({
+        Title = "Blox Fruit",
+        Default = false,
+        Callback = function(v) StatToggles["Blox Fruit"] = v end
     })
     
-    DistSection:Space()
-    
-    DistSection:Toggle({
-        Title = "🔫 Gun",
-        Default = Config.Stats.Distribution.Gun,
-        Flag = "StatGun",
-        Callback = function(value)
-            Config.Stats.Distribution.Gun = value
-        end
-    })
-    
-    DistSection:Space()
-    
-    DistSection:Toggle({
-        Title = "🍎 Blox Fruit",
-        Default = Config.Stats.Distribution["Blox Fruit"],
-        Flag = "StatFruit",
-        Callback = function(value)
-            Config.Stats.Distribution["Blox Fruit"] = value
-        end
-    })
-    
-    Tab:Space({ Columns = 2 })
-    
-    -- Controles
-    local ControlSection = Tab:Section({
-        Title = "⚙️ Controles",
-        Box = true,
-        BoxBorder = true,
-        Opened = true
-    })
-    
-    ControlSection:Toggle({
-        Title = Utils:Translate("AutoStatsLoop"),
-        Desc = "Distribuye puntos automáticamente cada 5 segundos",
-        Default = Config.Stats.Enabled,
-        Flag = "AutoStats",
-        Callback = function(value)
-            Config.Stats.Enabled = value
-        end
-    })
-    
-    ControlSection:Space()
-    
-    ControlSection:Button({
-        Title = Utils:Translate("ApplyPoints"),
-        Color = Colors.Green,
-        Icon = "zap",
+    Tab:Button({
+        Title = "Apply Stats Now",
         Callback = function()
-            StatsManager:DistributePoints(true)
+            pcall(function()
+                for stat, enabled in pairs(StatToggles) do
+                    if enabled then
+                        local points = Core.LocalPlayer.Data.Points.Value
+                        if points > 0 then
+                            Core.ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", stat, points)
+                        end
+                    end
+                end
+                deps.WindUI:Notify({ Title = "Stats", Content = "Puntos distribuidos!", Duration = 3 })
+            end)
         end
     })
     
-    Tab:Space({ Columns = 2 })
+    -- Auto Stats Loop
+    local AutoStatsEnabled = false
     
-    -- Sección Reset de Stats
-    local ResetSection = Tab:Section({
-        Title = "🔄 Resetear Estadísticas",
-        Box = true,
-        BoxBorder = true,
-        Opened = true
+    Tab:Toggle({
+        Title = "Auto Distribute Stats",
+        Default = false,
+        Callback = function(value)
+            AutoStatsEnabled = value
+            if value then
+                spawn(function()
+                    while AutoStatsEnabled do
+                        wait(1)
+                        pcall(function()
+                            for stat, enabled in pairs(StatToggles) do
+                                if enabled then
+                                    local points = Core.LocalPlayer.Data.Points.Value
+                                    if points > 0 then
+                                        Core.ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", stat, 1)
+                                    end
+                                end
+                            end
+                        end)
+                    end
+                end)
+            end
+        end
     })
     
-    ResetSection:Section({
-        Title = "Costo: 2500 Fragmentos",
-        TextSize = 12,
-        TextTransparency = 0.4
-    })
+    Tab:Section({ Title = "🔄 Stats Reset" })
     
-    ResetSection:Space()
-    
-    ResetSection:Button({
-        Title = "💎 Comprar Reset de Stats",
-        Color = Colors.Purple,
-        Icon = "refresh-cw",
+    Tab:Button({
+        Title = "Buy Stats Reset (2500 Fragments)",
         Callback = function()
-            StatsManager:BuyStatsReset()
+            pcall(function()
+                Core.ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "Refund", "1")
+                deps.WindUI:Notify({ Title = "Stats", Content = "Reset de stats comprado!", Duration = 3 })
+            end)
         end
     })
     
     return Tab
 end
 
-return StatsTab
+return Stats

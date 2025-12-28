@@ -1,90 +1,78 @@
 --[[
-    BLOXY HUB TITANIUM - UI: TAB PLAYER
+    BLOXY HUB TITANIUM - TAB: PLAYER
     Mejoras del jugador
 ]]
 
 local PlayerTab = {}
 
 function PlayerTab:Create(Window, deps)
-    local Utils = deps.Utils
-    local Config = deps.Config
-    local Colors = deps.Colors
+    local Core = deps.Core
+    local Player = deps.Player
     
-    local Tab = Window:Tab({
-        Title = Utils:Translate("Personaje"),
-        Icon = "solar:user-bold",
-        IconColor = Colors.Purple,
-        IconShape = "Square",
-        Border = true
-    })
+    local Tab = Window:Tab({ Title = "Player", Icon = "user" })
     
-    -- Sección Mejoras de Movilidad
-    local MobilitySection = Tab:Section({
-        Title = Utils:Translate("MobilityEnhancements"),
-        Box = true,
-        BoxBorder = true,
-        Opened = true
-    })
+    -- Movement
+    Tab:Section({ Title = "🏃 Movement" })
     
-    MobilitySection:Toggle({
-        Title = Utils:Translate("AutoAura"),
-        Desc = "Activa Buso Haki automáticamente",
-        Default = Config.Player.AutoAura,
-        Flag = "AutoAura",
+    Tab:Slider({
+        Title = "Walk Speed",
+        Value = { Min = 16, Max = 500, Default = 16 },
         Callback = function(value)
-            Config.Player.AutoAura = value
+            Player:SetWalkSpeed(value)
         end
     })
     
-    MobilitySection:Space()
-    
-    MobilitySection:Toggle({
-        Title = Utils:Translate("InfiniteSkyjump"),
-        Desc = "Salta infinitamente en el aire",
-        Default = Config.Player.InfiniteSkyjump,
-        Flag = "InfiniteSkyjump",
+    Tab:Slider({
+        Title = "Jump Power",
+        Value = { Min = 50, Max = 500, Default = 50 },
         Callback = function(value)
-            Config.Player.InfiniteSkyjump = value
+            Player:SetJumpPower(value)
         end
     })
     
-    Tab:Space({ Columns = 2 })
+    -- Enhancements
+    Tab:Section({ Title = "✨ Enhancements" })
     
-    -- Velocidad y Salto
-    local SpeedSection = Tab:Section({
-        Title = Utils:Translate("SpeedJump"),
-        Box = true,
-        BoxBorder = true,
-        Opened = true
-    })
-    
-    SpeedSection:Slider({
-        Title = Utils:Translate("WalkSpeed"),
-        Step = 1,
-        Value = {
-            Min = 16,
-            Max = 200,
-            Default = Config.Player.WalkSpeed
-        },
-        Flag = "WalkSpeed",
+    Tab:Toggle({
+        Title = "Infinite Sky Jump",
+        Default = false,
         Callback = function(value)
-            Config.Player.WalkSpeed = value
+            _G.InfiniteJump = value
         end
     })
     
-    SpeedSection:Space()
-    
-    SpeedSection:Slider({
-        Title = Utils:Translate("JumpPower"),
-        Step = 1,
-        Value = {
-            Min = 50,
-            Max = 300,
-            Default = Config.Player.JumpPower
-        },
-        Flag = "JumpPower",
+    Tab:Toggle({
+        Title = "Auto Buso (Haki)",
+        Default = false,
         Callback = function(value)
-            Config.Player.JumpPower = value
+            _G.AutoBuso = value
+        end
+    })
+    
+    -- Quick Actions
+    Tab:Section({ Title = "⚡ Quick Actions" })
+    
+    Tab:Button({
+        Title = "Full Heal (Eat Fruit)",
+        Callback = function()
+            pcall(function()
+                for _, fruit in pairs(Core.Workspace:GetDescendants()) do
+                    if fruit:IsA("Tool") and fruit.ToolTip == "Blox Fruit" then
+                        firetouchinterest(Core.LocalPlayer.Character.HumanoidRootPart, fruit.Handle, 0)
+                        wait()
+                        firetouchinterest(Core.LocalPlayer.Character.HumanoidRootPart, fruit.Handle, 1)
+                    end
+                end
+            end)
+        end
+    })
+    
+    Tab:Button({
+        Title = "Respawn",
+        Callback = function()
+            pcall(function()
+                Core.LocalPlayer.Character.Humanoid.Health = 0
+            end)
         end
     })
     

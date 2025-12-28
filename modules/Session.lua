@@ -1,185 +1,97 @@
 --[[
     BLOXY HUB TITANIUM - MÓDULO: SESSION
-    Estadísticas de sesión - CÓDIGO PROBADO
+    Estadísticas de sesión
 ]]
 
-local Session = {
-    StartTime = os.time(),
-    StartLevel = 0,
-    StartBeli = 0,
-    StartFragments = 0,
-    
-    CurrentLevel = 0,
-    CurrentBeli = 0,
-    CurrentFragments = 0,
-    
-    LevelsGained = 0,
-    BeliEarned = 0,
-    FragmentsEarned = 0,
-    MobsKilled = 0,
-    
-    Uptime = "00:00:00",
-    Ping = 0,
-    FPS = 60,
-    Status = "Iniciando...",
-    
-    -- Para FPS dinámico
-    LastFPSUpdate = 0,
-    FrameCount = 0
-}
+local Session = {}
 
--- Dependencias
-local Services
-local RunService
+local Core = nil
 
-function Session:Init(deps)
-    Services = deps.Services
-    RunService = game:GetService("RunService")
+Session.StartTime = os.time()
+Session.StartLevel = 0
+Session.MobsKilled = 0
+Session.FPS = 60
+Session.Ping = 0
+
+function Session:Init(core)
+    Core = core
     
-    -- Inicializar datos
+    -- Obtener nivel inicial
     task.spawn(function()
         task.wait(3)
-        
         pcall(function()
-            local data = Services.LocalPlayer:WaitForChild("Data", 30)
-            if data then
-                if data:FindFirstChild("Level") then
-                    self.StartLevel = data.Level.Value
-                end
-                if data:FindFirstChild("Beli") then
-                    self.StartBeli = data.Beli.Value
-                end
-                if data:FindFirstChild("Fragments") then
-                    self.StartFragments = data.Fragments.Value
-                end
-            end
-            
-            self.Status = "Sesión Iniciada"
-            print("[SESSION] Nivel inicial: " .. self.StartLevel)
+            Session.StartLevel = Core.LocalPlayer.Data.Level.Value
         end)
     end)
     
-    -- Loop de FPS
+    -- FPS Counter
     self:StartFPSCounter()
+    
+    -- Ping Counter
+    self:StartPingCounter()
 end
-
--- ═══════════════════════════════════════════════════════════════
--- FPS DINÁMICO REAL
--- ═══════════════════════════════════════════════════════════════
 
 function Session:StartFPSCounter()
     task.spawn(function()
         while true do
-            local startTime = tick()
-            local frameCount = 0
-            
-            -- Contar frames por 1 segundo
-            local connection
-            connection = RunService.RenderStepped:Connect(function()
-                frameCount = frameCount + 1
+            local frames = 0
+            local conn = Core.RunService.RenderStepped:Connect(function()
+                frames = frames + 1
             end)
-            
             task.wait(1)
-            connection:Disconnect()
-            
-            -- FPS real
-            self.FPS = frameCount
-            
-            -- Añadir variación natural (±2)
-            self.FPS = self.FPS + math.random(-2, 2)
-            if self.FPS < 1 then self.FPS = 1 end
+            conn:Disconnect()
+            Session.FPS = frames + math.random(-2, 2)
         end
     end)
 end
 
--- ═══════════════════════════════════════════════════════════════
--- PING REAL
--- ═══════════════════════════════════════════════════════════════
-
-function Session:GetRealPing()
-    local success, ping = pcall(function()
-        local stats = game:GetService("Stats")
-        return stats.Network.ServerStatsItem["Data Ping"]:GetValue()
+function Session:StartPingCounter()
+    task.spawn(function()
+        while true do
+            pcall(function()
+                Session.Ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())
+            end)
+            task.wait(1)
+        end
     end)
-    
-    if success and ping then
-        return math.floor(ping)
-    end
-    
-    return 0
 end
-
--- ═══════════════════════════════════════════════════════════════
--- HORA DE LIMA, PERÚ
--- ═══════════════════════════════════════════════════════════════
 
 function Session:GetLimaTime()
-    -- Lima está en UTC-5
-    local utcTime = os.time()
-    local limaOffset = -5 * 3600
-    local limaTime = utcTime + limaOffset
-    return os.date("!%H:%M:%S", limaTime)
+    local utc = os.time()
+    local lima = utc + (-5 * 3600)
+    return os.date("!%H:%M:%S", lima)
 end
 
--- ═══════════════════════════════════════════════════════════════
--- GETTERS
--- ═══════════════════════════════════════════════════════════════
-
-function Session:GetPlayerLevel()
-    local success, result = pcall(function()
-        return Services.LocalPlayer.Data.Level.Value
-    end)
-    return success and result or 0
-end
-
-function Session:GetPlayerBeli()
-    local success, result = pcall(function()
-        return Services.LocalPlayer.Data.Beli.Value
-    end)
-    return success and result or 0
-end
-
-function Session:GetPlayerFragments()
-    local success, result = pcall(function()
-        return Services.LocalPlayer.Data.Fragments.Value
-    end)
-    return success and result or 0
-end
-
--- ═══════════════════════════════════════════════════════════════
--- ACTUALIZACIÓN
--- ═══════════════════════════════════════════════════════════════
-
-function Session:Update()
-    -- Uptime
-    local elapsed = os.time() - self.StartTime
+function Session:GetUptime()
+    local elapsed = os.time() - Session.StartTime
     local hours = math.floor(elapsed / 3600)
     local mins = math.floor((elapsed % 3600) / 60)
     local secs = elapsed % 60
-    self.Uptime = string.format("%02d:%02d:%02d", hours, mins, secs)
-    
-    -- Ping real
-    self.Ping = self:GetRealPing()
-    
-    -- Estadísticas actuales
-    self.CurrentLevel = self:GetPlayerLevel()
-    self.CurrentBeli = self:GetPlayerBeli()
-    self.CurrentFragments = self:GetPlayerFragments()
-    
-    -- Calcular ganancias
-    if self.CurrentLevel > 0 and self.StartLevel > 0 then
-        self.LevelsGained = math.max(0, self.CurrentLevel - self.StartLevel)
-    end
-    if self.CurrentBeli > 0 and self.StartBeli > 0 then
-        self.BeliEarned = math.max(0, self.CurrentBeli - self.StartBeli)
-    end
-    if self.CurrentFragments > 0 and self.StartFragments > 0 then
-        self.FragmentsEarned = math.max(0, self.CurrentFragments - self.StartFragments)
-    end
+    return string.format("%02d:%02d:%02d", hours, mins, secs)
 end
 
-function Session:AddMobKill()
-    self.MobsKilled = self.MobsKilled + 1
+function Session:GetCurrentLevel()
+    local s, r = pcall(function() return Core.LocalPlayer.Data.Level.Value end)
+    return s and r or 0
+end
+
+function Session:GetCurrentBeli()
+    local s, r = pcall(function() return Core.LocalPlayer.Data.Beli.Value end)
+    return s and r or 0
+end
+
+function Session:GetFragments()
+    if Core.First_Sea then return "Sea 2+ requerido" end
+    local s, r = pcall(function() return Core.LocalPlayer.Data.Fragments.Value end)
+    return s and tostring(r) or "0"
+end
+
+function Session:GetLevelsGained()
+    local current = self:GetCurrentLevel()
+    if current > 0 and Session.StartLevel > 0 then
+        return math.max(0, current - Session.StartLevel)
+    end
+    return 0
 end
 
 return Session
