@@ -1,6 +1,6 @@
 --[[
     ╔══════════════════════════════════════════════════════════════╗
-    ║  BLOX FRUITS PANEL | BLOXY HUB TITANIUM V7.0               ║
+    ║  BLOX FRUITS PANEL | BLOXY HUB TITANIUM V7.5               ║
     ║  Arquitectura Modular Profesional | Diseñado por Sammir    ║
     ╚══════════════════════════════════════════════════════════════╝
 --]]
@@ -20,53 +20,19 @@ local GITHUB_RAW = "https://raw.githubusercontent.com/Sam123mir/BloxyHub/refs/he
 
 print("[BLOXY HUB] Iniciando sistema...")
 
-local LoadingLabel
-local function CreateLoadingVisual()
+-- Destruir pantalla de carga residual de ejecuciones previas
+pcall(function()
     local player = game:GetService("Players").LocalPlayer
     local gui = player:FindFirstChild("PlayerGui"):FindFirstChild("BloxyLoading")
     if gui then gui:Destroy() end
-    
-    gui = Instance.new("ScreenGui")
-    gui.Name = "BloxyLoading"
-    gui.ResetOnSpawn = false
-    gui.Parent = player:WaitForChild("PlayerGui")
-    
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 280, 0, 100)
-    frame.Position = UDim2.new(0.5, -140, 0.4, -50)
-    frame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-    frame.BorderSizePixel = 0
-    frame.Parent = gui
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 15)
-    corner.Parent = frame
-    
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(0, 150, 255)
-    stroke.Thickness = 2
-    stroke.Parent = frame
-    
-    LoadingLabel = Instance.new("TextLabel")
-    LoadingLabel.Size = UDim2.new(1, 0, 1, 0)
-    LoadingLabel.BackgroundTransparency = 1
-    LoadingLabel.Text = "BLOXY HUB\nIniciando..."
-    LoadingLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    LoadingLabel.TextSize = 20
-    LoadingLabel.Font = Enum.Font.GothamBold
-    LoadingLabel.Parent = frame
-    
-    return gui
-end
-
-pcall(CreateLoadingVisual)
+end)
 
 local function UpdateLoading(text)
-    if LoadingLabel then
-        LoadingLabel.Text = "BLOXY HUB\n" .. text
-        print("[BLOXY HUB] " .. text)
-    end
+    -- Deprecated: Now prints instead of updating UI
+    print("[BLOXY HUB] " .. text)
 end
+
+if getgenv().BloxyHub.Active then
 
 if getgenv().BloxyHub.Active then
     warn("[BLOXY HUB] Ya hay una instancia activa. Cerrando instancia anterior...")
@@ -170,7 +136,7 @@ local function UpdateCharacterReferences(newChar)
     end
 end
 
-UpdateLoading("Personaje...")
+-- UpdateLoading("Personaje...")
 task.spawn(function()
     if not Character then 
         Character = LocalPlayer.CharacterAdded:Wait()
@@ -184,7 +150,7 @@ LocalPlayer.CharacterAdded:Connect(UpdateCharacterReferences)
 -- MÓDULO: CONFIGURACIÓN ELITE
 -- ═══════════════════════════════════════════════════════════════
 
-UpdateLoading("Configuración...")
+-- UpdateLoading("Configuración...")
 local Config = {
     -- Auto Farming
     AutoFarm = {
@@ -492,7 +458,8 @@ local I18n = {
 -- MÓDULO: SESIÓN Y ESTADÍSTICAS
 -- ═══════════════════════════════════════════════════════════════
 
-UpdateLoading("Módulos...")
+-- UpdateLoading("Módulos...")
+local Farming = {}
 local Session = {
     StartTime = os.time(),
     StartLevel = 0,
@@ -1139,7 +1106,7 @@ end
 -- MÓDULO: UI FLUENT (Interfaz Premium Titanium)
 -- ═══════════════════════════════════════════════════════════════
 
-UpdateLoading("Descargando Interfaz...")
+-- UpdateLoading("Descargando Interfaz...")
 local Fluent = nil
 local s, e = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/main.lua"))()
@@ -1165,14 +1132,14 @@ else
     end
 end
 
-UpdateLoading("Cargando Guardado...")
+-- UpdateLoading("Cargando Guardado...")
 local SaveManager, InterfaceManager
 pcall(function()
     SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
     InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 end)
 
-UpdateLoading("Construyendo Ventana...")
+-- UpdateLoading("Construyendo Ventana...")
 
 local Window = Fluent:CreateWindow({
     Title = "Blox Fruits Panel 🏴‍☠️ | Bloxy Hub",
