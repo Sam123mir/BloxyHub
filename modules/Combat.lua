@@ -1,16 +1,15 @@
 --[[
     BLOXY HUB TITANIUM - MÓDULO: COMBAT
-    Sistema de combate - VERSIÓN ROBUSTA PROBADA
+    Sistema de combate - CÓDIGO PROBADO (basado en scripts funcionales)
 ]]
 
-local Combat = {
-    LastAttack = 0,
-    AttackCooldown = 0.05,
-    LastSkill = {}
-}
+local Combat = {}
 
 -- Dependencias
 local Services, Config, Utils, Session
+
+-- Variables del CombatFramework
+local CbFw, CbFw2
 
 function Combat:Init(deps)
     Services = deps.Services
@@ -18,103 +17,117 @@ function Combat:Init(deps)
     Utils = deps.Utils
     Session = deps.Session
     
-    -- Inicializar cooldowns de skills
-    for _, key in ipairs({"Z", "X", "C", "V"}) do
-        self.LastSkill[key] = 0
-    end
-end
-
--- ═══════════════════════════════════════════════════════════════
--- MÉTODOS DE ATAQUE ROBUSTOS
--- ═══════════════════════════════════════════════════════════════
-
--- Método 1: Click virtual (más confiable)
-function Combat:ClickAttack()
+    -- Inicializar CombatFramework
     pcall(function()
-        local VirtualInputManager = game:GetService("VirtualInputManager")
-        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-        task.wait()
-        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+        local plr = Services.LocalPlayer
+        CbFw = debug.getupvalues(require(plr.PlayerScripts.CombatFramework))
+        CbFw2 = CbFw[2]
     end)
 end
 
--- Método 2: VirtualUser
-function Combat:VirtualUserAttack()
-    pcall(function()
-        local VU = game:GetService("VirtualUser")
-        VU:CaptureController()
-        VU:Button1Down(Vector2.new(0, 0), Services.Workspace.CurrentCamera.CFrame)
-        task.wait(0.01)
-        VU:Button1Up(Vector2.new(0, 0), Services.Workspace.CurrentCamera.CFrame)
+-- ═══════════════════════════════════════════════════════════════
+-- ATAQUE SIN COOLDOWN (MÉTODO PROBADO)
+-- ═══════════════════════════════════════════════════════════════
+
+function Combat:GetCurrentBlade()
+    local success, result = pcall(function()
+        local p13 = CbFw2.activeController
+        local ret = p13.blades[1]
+        if not ret then return nil end
+        while ret.Parent ~= Services.LocalPlayer.Character do 
+            ret = ret.Parent 
+        end
+        return ret
     end)
+    return success and result or nil
 end
 
--- Método 3: Activar herramienta directamente
-function Combat:ToolAttack()
-    pcall(function()
-        local char = Utils:GetCharacter()
-        if char then
-            local tool = char:FindFirstChildOfClass("Tool")
-            if tool then
-                tool:Activate()
+function Combat:AttackNoCoolDown()
+    local success = pcall(function()
+        local plr = Services.LocalPlayer
+        local AC = CbFw2.activeController
+        
+        for i = 1, 1 do
+            local bladehit = require(game.ReplicatedStorage.CombatFramework.RigLib).getBladeHits(
+                plr.Character,
+                {plr.Character.HumanoidRootPart},
+                60
+            )
+            
+            local cac = {}
+            local hash = {}
+            for k, v in pairs(bladehit) do
+                if v.Parent:FindFirstChild("HumanoidRootPart") and not hash[v.Parent] then
+                    table.insert(cac, v.Parent.HumanoidRootPart)
+                    hash[v.Parent] = true
+                end
+            end
+            bladehit = cac
+            
+            if #bladehit > 0 then
+                local u8 = debug.getupvalue(AC.attack, 5)
+                local u9 = debug.getupvalue(AC.attack, 6)
+                local u7 = debug.getupvalue(AC.attack, 4)
+                local u10 = debug.getupvalue(AC.attack, 7)
+                local u12 = (u8 * 798405 + u7 * 727595) % u9
+                local u13 = u7 * 798405
+                
+                u12 = (u12 * u9 + u13) % 1099511627776
+                u8 = math.floor(u12 / u9)
+                u7 = u12 - u8 * u9
+                u10 = u10 + 1
+                
+                debug.setupvalue(AC.attack, 5, u8)
+                debug.setupvalue(AC.attack, 6, u9)
+                debug.setupvalue(AC.attack, 4, u7)
+                debug.setupvalue(AC.attack, 7, u10)
+                
+                pcall(function()
+                    for k, v in pairs(AC.animator.anims.basic) do
+                        v:Play()
+                    end
+                end)
+                
+                local blade = self:GetCurrentBlade()
+                if plr.Character:FindFirstChildOfClass("Tool") and AC.blades and AC.blades[1] and blade then
+                    game:GetService("ReplicatedStorage").RigControllerEvent:FireServer("weaponChange", tostring(blade))
+                    game.ReplicatedStorage.Remotes.Validator:FireServer(math.floor(u12 / 1099511627776 * 16777215), u10)
+                    game:GetService("ReplicatedStorage").RigControllerEvent:FireServer("hit", bladehit, i, "")
+                end
             end
         end
     end)
-end
-
--- Método 4: Remote de combate de Blox Fruits
-function Combat:RemoteAttack()
-    pcall(function()
-        local args = {
-            [1] = Services.Workspace.CurrentCamera.CFrame
-        }
-        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("LeftClick", unpack(args))
-    end)
-end
-
--- Ataque rápido combinado (usa todos los métodos)
-function Combat:FastAttack()
-    if not Config.Combat.FastAttack then return end
-    
-    local currentTime = tick()
-    if currentTime - self.LastAttack < (Config.Combat.AttackSpeed or 0.05) then return end
-    self.LastAttack = currentTime
-    
-    -- Ejecutar múltiples métodos de ataque
-    self:ToolAttack()
-    self:ClickAttack()
-    self:RemoteAttack()
+    return success
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- HABILIDADES (Z, X, C, V)
+-- ATAQUE NORMAL (MÉTODO ALTERNATIVO)
 -- ═══════════════════════════════════════════════════════════════
 
-function Combat:UseSkill(key, cooldown)
-    cooldown = cooldown or 0.5
-    
-    local currentTime = tick()
-    if currentTime - (self.LastSkill[key] or 0) < cooldown then return false end
-    
+function Combat:NormalAttack()
     pcall(function()
-        local VU = game:GetService("VirtualUser")
-        VU:CaptureController()
-        VU:SetKeyDown(key:lower())
-        task.wait(0.1)
-        VU:SetKeyUp(key:lower())
+        local Module = require(Services.LocalPlayer.PlayerScripts.CombatFramework)
+        local CombatFramework = debug.getupvalues(Module)[2]
+        local CamShake = require(game.ReplicatedStorage.Util.CameraShaker)
+        CamShake:Stop()
+        CombatFramework.activeController.attacking = false
+        CombatFramework.activeController.timeToNextAttack = 0
+        CombatFramework.activeController.hitboxMagnitude = 180
+        game:GetService('VirtualUser'):CaptureController()
+        game:GetService('VirtualUser'):Button1Down(Vector2.new(1280, 672))
     end)
-    
-    self.LastSkill[key] = currentTime
-    return true
 end
 
-function Combat:UseAllSkills()
-    for _, key in ipairs({"Z", "X", "C", "V"}) do
-        if Config.AIMastery.Skills[key] then
-            self:UseSkill(key, 0.3)
-            task.wait(0.15)
+-- ═══════════════════════════════════════════════════════════════
+-- AUTO HAKI
+-- ═══════════════════════════════════════════════════════════════
+
+function Combat:AutoHaki()
+    pcall(function()
+        if not Services.LocalPlayer.Character:FindFirstChild("HasBuso") then
+            game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("Buso")
         end
-    end
+    end)
 end
 
 -- ═══════════════════════════════════════════════════════════════
@@ -128,45 +141,31 @@ function Combat:AttackEnemy(enemy)
     local enemyHum = enemy:FindFirstChild("Humanoid")
     
     if not enemyHRP or not enemyHum then return false end
-    if enemyHum.Health <= 0 then 
+    if enemyHum.Health <= 0 then
         Session:AddMobKill()
-        return false 
+        return false
     end
     
-    local rootPart = Utils:GetRootPart()
-    if not rootPart then return false end
+    -- Auto Haki
+    self:AutoHaki()
     
-    -- Calcular distancia
-    local dist = (rootPart.Position - enemyHRP.Position).Magnitude
+    -- Teletransportar al enemigo
+    Utils:Tween(enemyHRP.CFrame * CFrame.new(0, 10, 0))
     
-    -- Actualizar status
-    Session.Status = "Atacando: " .. enemy.Name
-    
-    -- Teletransportar cerca del enemigo si está lejos
-    if dist > 15 then
-        local attackPosition = enemyHRP.CFrame * CFrame.new(0, 0, -5)
-        
-        -- Usar tostring para hacer el teleport más robusto
-        pcall(function()
-            for i = 1, 3 do
-                rootPart.CFrame = attackPosition
-                task.wait()
-            end
-        end)
-    end
-    
-    -- Mirar al enemigo
+    -- Hacer el enemigo más grande para hitbox
     pcall(function()
-        rootPart.CFrame = CFrame.lookAt(rootPart.Position, enemyHRP.Position)
+        enemyHRP.Size = Vector3.new(60, 60, 60)
+        enemyHRP.Transparency = 1
+        enemyHum.JumpPower = 0
+        enemyHum.WalkSpeed = 0
+        enemyHRP.CanCollide = false
     end)
     
     -- Atacar
-    self:FastAttack()
+    self:AttackNoCoolDown()
     
-    -- Usar habilidades si está activo el modo IA
-    if Config.AIMastery.Enabled then
-        self:UseAllSkills()
-    end
+    -- Actualizar status
+    Session.Status = "Atacando: " .. enemy.Name
     
     return true
 end
@@ -178,36 +177,14 @@ end
 function Combat:KillAura()
     if not Config.Combat.KillAura then return end
     
-    local enemies = Utils:GetEnemiesInRange(Config.Combat.Range or 50)
-    
-    for _, enemy in ipairs(enemies) do
-        if enemy and enemy:FindFirstChild("Humanoid") then
+    for _, enemy in pairs(game:GetService("Workspace").Enemies:GetChildren()) do
+        if enemy:FindFirstChild("Humanoid") and enemy:FindFirstChild("HumanoidRootPart") then
             if enemy.Humanoid.Health > 0 then
-                self:AttackEnemy(enemy)
+                local dist = (Services.LocalPlayer.Character.HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Magnitude
+                if dist <= (Config.Combat.Range or 50) then
+                    self:AttackEnemy(enemy)
+                end
             end
-        end
-    end
-end
-
--- ═══════════════════════════════════════════════════════════════
--- MASTERY FINISHER
--- ═══════════════════════════════════════════════════════════════
-
-function Combat:ExecuteMasteryFinisher(enemy)
-    if not Config.Mastery.Enabled or not enemy then return end
-    
-    local enemyHum = enemy:FindFirstChild("Humanoid")
-    if not enemyHum then return end
-    
-    local healthPercent = (enemyHum.Health / enemyHum.MaxHealth) * 100
-    
-    if healthPercent <= (Config.Mastery.FinishAtHealth or 20) then
-        local weapon = Config.AIMastery.SelectedWeapon or "Melee"
-        Utils:Equip(weapon)
-        task.wait(0.15)
-        
-        if Config.Mastery.UseSkills then
-            self:UseSkill("Z", 0.2)
         end
     end
 end

@@ -1,12 +1,11 @@
 --[[
     BLOXY HUB TITANIUM - MÓDULO: PLAYER ENHANCEMENTS
-    Mejoras del jugador - VERSIÓN ROBUSTA
+    Mejoras del jugador - CÓDIGO PROBADO
 ]]
 
 local PlayerEnhancements = {
-    SkyjumpConnected = false,
     SpeedConnection = nil,
-    AuraConnection = nil
+    SkyjumpConnected = false
 }
 
 -- Dependencias
@@ -19,19 +18,15 @@ function PlayerEnhancements:Init(deps)
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- AUTO AURA (HAKI)
+-- AUTO HAKI (BUSO)
 -- ═══════════════════════════════════════════════════════════════
 
 function PlayerEnhancements:AutoAura()
     if not Config.Player.AutoAura then return end
     
     pcall(function()
-        local remote = Services.ReplicatedStorage:FindFirstChild("Remotes")
-        if remote then
-            local comm = remote:FindFirstChild("CommF_")
-            if comm then
-                comm:InvokeServer("Buso")
-            end
+        if not Services.LocalPlayer.Character:FindFirstChild("HasBuso") then
+            game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("Buso")
         end
     end)
 end
@@ -56,30 +51,24 @@ function PlayerEnhancements:SetupInfiniteSkyjump()
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- SPEED/JUMP LOOP (ROBUSTO)
+-- SPEED/JUMP LOOP
 -- ═══════════════════════════════════════════════════════════════
 
 function PlayerEnhancements:SetupSpeedLoop()
     if self.SpeedConnection then return end
     
-    -- Loop constante para mantener velocidad/salto
-    -- El juego de Blox Fruits resetea estos valores constantemente
-    self.SpeedConnection = Services.RunService.Heartbeat:Connect(function()
+    self.SpeedConnection = game:GetService("RunService").Heartbeat:Connect(function()
         pcall(function()
             local humanoid = Utils:GetHumanoid()
             if humanoid then
-                -- Aplicar velocidad si es mayor que la default
+                -- Aplicar velocidad
                 if Config.Player.WalkSpeed and Config.Player.WalkSpeed > 16 then
-                    if humanoid.WalkSpeed ~= Config.Player.WalkSpeed then
-                        humanoid.WalkSpeed = Config.Player.WalkSpeed
-                    end
+                    humanoid.WalkSpeed = Config.Player.WalkSpeed
                 end
                 
-                -- Aplicar poder de salto si es mayor que la default
+                -- Aplicar salto
                 if Config.Player.JumpPower and Config.Player.JumpPower > 50 then
-                    if humanoid.JumpPower ~= Config.Player.JumpPower then
-                        humanoid.JumpPower = Config.Player.JumpPower
-                    end
+                    humanoid.JumpPower = Config.Player.JumpPower
                 end
             end
         end)
@@ -87,29 +76,69 @@ function PlayerEnhancements:SetupSpeedLoop()
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- ACTUALIZACIÓN PRINCIPAL
+-- NOCLIP (PARA FARMING)
+-- ═══════════════════════════════════════════════════════════════
+
+function PlayerEnhancements:SetupNoclip()
+    game:GetService("RunService").Stepped:Connect(function()
+        if Config.AutoFarm.Enabled or Config.Mastery.Enabled then
+            pcall(function()
+                for _, part in pairs(Services.LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- BODY VELOCITY (PARA FARMING)
+-- ═══════════════════════════════════════════════════════════════
+
+function PlayerEnhancements:SetupBodyClip()
+    task.spawn(function()
+        while task.wait() do
+            pcall(function()
+                if Config.AutoFarm.Enabled or Config.Mastery.Enabled then
+                    local rootPart = Utils:GetRootPart()
+                    if rootPart and not rootPart:FindFirstChild("BodyClip") then
+                        local noclip = Instance.new("BodyVelocity")
+                        noclip.Name = "BodyClip"
+                        noclip.Parent = rootPart
+                        noclip.MaxForce = Vector3.new(100000, 100000, 100000)
+                        noclip.Velocity = Vector3.new(0, 0, 0)
+                    end
+                else
+                    local rootPart = Utils:GetRootPart()
+                    if rootPart and rootPart:FindFirstChild("BodyClip") then
+                        rootPart.BodyClip:Destroy()
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- UPDATE
 -- ═══════════════════════════════════════════════════════════════
 
 function PlayerEnhancements:Update()
-    -- Auto Aura cada actualización (el juego la desactiva)
     if Config.Player.AutoAura then
         self:AutoAura()
     end
 end
 
 -- ═══════════════════════════════════════════════════════════════
--- LIMPIEZA
+-- CLEANUP
 -- ═══════════════════════════════════════════════════════════════
 
 function PlayerEnhancements:Cleanup()
     if self.SpeedConnection then
         self.SpeedConnection:Disconnect()
         self.SpeedConnection = nil
-    end
-    
-    if self.AuraConnection then
-        self.AuraConnection:Disconnect()
-        self.AuraConnection = nil
     end
 end
 

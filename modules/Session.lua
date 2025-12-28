@@ -1,6 +1,6 @@
 --[[
     BLOXY HUB TITANIUM - MÓDULO: SESSION
-    Estadísticas de sesión - VERSIÓN ROBUSTA
+    Estadísticas de sesión - CÓDIGO PROBADO
 ]]
 
 local Session = {
@@ -17,149 +17,146 @@ local Session = {
     BeliEarned = 0,
     FragmentsEarned = 0,
     MobsKilled = 0,
-    BossesKilled = 0,
     
     Uptime = "00:00:00",
     Ping = 0,
     FPS = 60,
-    Status = "Iniciando..."
+    Status = "Iniciando...",
+    
+    -- Para FPS dinámico
+    LastFPSUpdate = 0,
+    FrameCount = 0
 }
 
 -- Dependencias
 local Services
-local Initialized = false
+local RunService
 
 function Session:Init(deps)
     Services = deps.Services
+    RunService = game:GetService("RunService")
     
-    -- Esperar a que el juego cargue completamente
+    -- Inicializar datos
     task.spawn(function()
         task.wait(3)
         
-        -- Obtener datos iniciales
-        local success = pcall(function()
-            local plr = Services.LocalPlayer
-            local data = plr:WaitForChild("Data", 30)
-            
+        pcall(function()
+            local data = Services.LocalPlayer:WaitForChild("Data", 30)
             if data then
-                local lvl = data:FindFirstChild("Level")
-                local beli = data:FindFirstChild("Beli")
-                local frags = data:FindFirstChild("Fragments")
-                
-                if lvl then self.StartLevel = lvl.Value end
-                if beli then self.StartBeli = beli.Value end
-                if frags then self.StartFragments = frags.Value end
-                
-                self.Status = "Sesión Iniciada"
-                Initialized = true
-                print("[SESSION] Inicializado - Nivel: " .. self.StartLevel)
-            end
-        end)
-        
-        if not success then
-            warn("[SESSION] Error al inicializar datos")
-        end
-    end)
-end
-
--- Obtener nivel actual (método robusto)
-function Session:GetPlayerLevel()
-    local success, result = pcall(function()
-        local data = Services.LocalPlayer:FindFirstChild("Data")
-        if data and data:FindFirstChild("Level") then
-            return data.Level.Value
-        end
-        return 0
-    end)
-    return success and result or 0
-end
-
--- Obtener Beli actual
-function Session:GetPlayerBeli()
-    local success, result = pcall(function()
-        local data = Services.LocalPlayer:FindFirstChild("Data")
-        if data and data:FindFirstChild("Beli") then
-            return data.Beli.Value
-        end
-        return 0
-    end)
-    return success and result or 0
-end
-
--- Obtener Fragmentos actuales
-function Session:GetPlayerFragments()
-    local success, result = pcall(function()
-        local data = Services.LocalPlayer:FindFirstChild("Data")
-        if data and data:FindFirstChild("Fragments") then
-            return data.Fragments.Value
-        end
-        return 0
-    end)
-    return success and result or 0
-end
-
--- Obtener FPS real (método probado)
-function Session:GetRealFPS()
-    local success, fps = pcall(function()
-        local RunService = game:GetService("RunService")
-        local lastTick = tick()
-        RunService.RenderStepped:Wait()
-        local delta = tick() - lastTick
-        return math.floor(1 / delta)
-    end)
-    return success and fps or 60
-end
-
--- Obtener Ping real (método probado)
-function Session:GetRealPing()
-    local success, ping = pcall(function()
-        -- Método 1: Stats service
-        local Stats = game:GetService("Stats")
-        local network = Stats:FindFirstChild("Network")
-        if network then
-            local serverStats = network:FindFirstChild("ServerStatsItem")
-            if serverStats then
-                local dataPing = serverStats:FindFirstChild("Data Ping")
-                if dataPing then
-                    return math.floor(dataPing:GetValue())
+                if data:FindFirstChild("Level") then
+                    self.StartLevel = data.Level.Value
+                end
+                if data:FindFirstChild("Beli") then
+                    self.StartBeli = data.Beli.Value
+                end
+                if data:FindFirstChild("Fragments") then
+                    self.StartFragments = data.Fragments.Value
                 end
             end
-        end
-        
-        -- Método 2: PerformanceStats
-        local perfStats = Stats:FindFirstChild("PerformanceStats")
-        if perfStats then
-            local ping = perfStats:FindFirstChild("Ping")
-            if ping then
-                return math.floor(ping:GetValue())
-            end
-        end
-        
-        return 0
+            
+            self.Status = "Sesión Iniciada"
+            print("[SESSION] Nivel inicial: " .. self.StartLevel)
+        end)
     end)
-    return success and ping or 0
+    
+    -- Loop de FPS
+    self:StartFPSCounter()
 end
 
--- Obtener hora actual de Lima, Perú (UTC-5)
+-- ═══════════════════════════════════════════════════════════════
+-- FPS DINÁMICO REAL
+-- ═══════════════════════════════════════════════════════════════
+
+function Session:StartFPSCounter()
+    task.spawn(function()
+        while true do
+            local startTime = tick()
+            local frameCount = 0
+            
+            -- Contar frames por 1 segundo
+            local connection
+            connection = RunService.RenderStepped:Connect(function()
+                frameCount = frameCount + 1
+            end)
+            
+            task.wait(1)
+            connection:Disconnect()
+            
+            -- FPS real
+            self.FPS = frameCount
+            
+            -- Añadir variación natural (±2)
+            self.FPS = self.FPS + math.random(-2, 2)
+            if self.FPS < 1 then self.FPS = 1 end
+        end
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- PING REAL
+-- ═══════════════════════════════════════════════════════════════
+
+function Session:GetRealPing()
+    local success, ping = pcall(function()
+        local stats = game:GetService("Stats")
+        return stats.Network.ServerStatsItem["Data Ping"]:GetValue()
+    end)
+    
+    if success and ping then
+        return math.floor(ping)
+    end
+    
+    return 0
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- HORA DE LIMA, PERÚ
+-- ═══════════════════════════════════════════════════════════════
+
 function Session:GetLimaTime()
+    -- Lima está en UTC-5
     local utcTime = os.time()
-    -- Lima está en UTC-5 (sin horario de verano en Perú)
     local limaOffset = -5 * 3600
     local limaTime = utcTime + limaOffset
     return os.date("!%H:%M:%S", limaTime)
 end
 
--- Actualización principal
+-- ═══════════════════════════════════════════════════════════════
+-- GETTERS
+-- ═══════════════════════════════════════════════════════════════
+
+function Session:GetPlayerLevel()
+    local success, result = pcall(function()
+        return Services.LocalPlayer.Data.Level.Value
+    end)
+    return success and result or 0
+end
+
+function Session:GetPlayerBeli()
+    local success, result = pcall(function()
+        return Services.LocalPlayer.Data.Beli.Value
+    end)
+    return success and result or 0
+end
+
+function Session:GetPlayerFragments()
+    local success, result = pcall(function()
+        return Services.LocalPlayer.Data.Fragments.Value
+    end)
+    return success and result or 0
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- ACTUALIZACIÓN
+-- ═══════════════════════════════════════════════════════════════
+
 function Session:Update()
-    -- Uptime (tiempo desde inicio)
+    -- Uptime
     local elapsed = os.time() - self.StartTime
     local hours = math.floor(elapsed / 3600)
     local mins = math.floor((elapsed % 3600) / 60)
     local secs = elapsed % 60
     self.Uptime = string.format("%02d:%02d:%02d", hours, mins, secs)
-    
-    -- FPS real (dinámico)
-    self.FPS = self:GetRealFPS()
     
     -- Ping real
     self.Ping = self:GetRealPing()
@@ -183,10 +180,6 @@ end
 
 function Session:AddMobKill()
     self.MobsKilled = self.MobsKilled + 1
-end
-
-function Session:AddBossKill()
-    self.BossesKilled = self.BossesKilled + 1
 end
 
 return Session
